@@ -40,13 +40,15 @@
 
 ### 1.2 The Two Platforms
 
-SFSR-REMS is delivered as **one application serving two distinct audiences**, sharing a single centralized database so that inventory and reservation state stay synchronized in real time.
+SFSR-REMS is delivered as **two separate applications with different network exposure**, sharing a single centralized database so that inventory and reservation state stay synchronized in real time. Full topology in §5.7.
 
-**A. Web-Based Real Estate Portal** *(external — buyers)*
-Public browsing of condominium projects, online reservation, document and payment upload, and transaction monitoring.
+**A. Web-Based Real Estate Portal** *(external — buyers)* — **deployed publicly**
+Public browsing of condominium projects, online reservation, document and payment upload, and transaction monitoring. Hosted on Vercel, reachable from anywhere.
 
-**B. Internal Management System** *(internal — 25 employees across 8 departments)*
-Payment verification, document validation, approval workflows, billing, statements of account, loan monitoring, reporting, and audit.
+**B. Internal Management System** *(internal — 25 employees across 8 departments)* — **runs locally**
+Payment verification, document validation, approval workflows, billing, statements of account, loan monitoring, reporting, and audit. Runs on **one office PC acting as a LAN server**; staff reach it over the office network. It is never published to the internet.
+
+They are separate builds and separate deployments, but they are **not** independent codebases: both consume the shared `@sfsr/domain` package, so the pricing engine and the reservation rules are literally the same code in both (§3.1, §5.1). The database is the integration point — there is no API between them.
 
 > The requirement that these stay in lockstep is explicit in `RESERVATION.doc`:
 > *"Once a reservation application is submitted, the selected condominium unit is automatically tagged as 'On Hold' to prevent multiple reservations for the same unit… across both the Web-Based Real Estate Portal and the Internal Management System."*
@@ -96,11 +98,21 @@ Parking types: Regular · Premium (⚠ `Tandem` appears in the reservation form 
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Framework | **Next.js 15** (App Router) | Server Components + Route Handlers let RBAC run on the server, not the browser |
-| UI library | **React 19** | |
-| Language | **TypeScript** (`strict: true`) | |
-| Styling | **Tailwind CSS v4** | |
-| Components | **shadcn/ui** | Copy-in components — no runtime dependency, fully themeable |
+Versions below are the ones actually installed and verified in Sprint 0, not the ones originally assumed.
+
+| Layer | Choice | Installed | Notes |
+|---|---|---|---|
+| Framework | **Next.js** (App Router) | `16.2.12` | Server Components + Route Handlers let RBAC run on the server, not the browser |
+| UI library | **React** | `19.2.8` | |
+| Language | **TypeScript** (`strict`) | `6.0.3` | Plus `noUncheckedIndexedAccess` and `noImplicitOverride` — see §3.9 |
+| Styling | **Tailwind CSS** | `4.3.3` | CSS-first config; no `tailwind.config.js` |
+| Components | **shadcn/ui** | — | Copy-in components — no runtime dependency, fully themeable |
+| Monorepo | **npm workspaces** | npm `11.4.2` | Built in; no Turborepo needed at this scale |
+
+> **Next.js 16 changed a file convention this plan depends on.** `middleware.ts` is
+> deprecated; the replacement is **`proxy.ts`**. Verified against the installed
+> package, which emits: *"The `middleware` file convention is deprecated. Please
+> use `proxy` instead."* All references below use `proxy.ts`.
 
 ### 2.2 Recommended Libraries
 
@@ -135,7 +147,7 @@ Parking types: Regular · Premium (⚠ `Tandem` appears in the reservation form 
 | **Cloud Firestore** | Centralized database, real-time synchronization |
 | **Cloudinary** | All file storage — project media *and* documents (see §2.4) |
 | **Google Cloud Vision API** | OCR text extraction, same Google project as Firebase |
-| **Vercel** | Hosting and deployment |
+| **Vercel** | Hosting for the **Portal only**. The Internal system runs on an office LAN server and is never deployed there (§5.7). |
 
 ### 2.4 Media & Document Storage Policy
 
@@ -183,9 +195,13 @@ No component calls Firestore directly. A component renders; a service decides; a
 
 Authorization is enforced at **three independent layers**:
 
-1. `middleware.ts` — route-group gate (`(internal)` requires an employee claim)
+1. `proxy.ts` — request gate (the Internal app requires an employee claim)
 2. Route Handler / Server Action — verifies the caller's role before mutating
 3. Firestore Security Rules — final backstop, enforced by the database itself
+
+A fourth layer applies to the Internal system specifically: it is not published
+to the internet at all (§5.7). Network isolation is a control, but it is the
+outermost one — the three above still apply in full.
 
 Hiding a button in the UI is cosmetic and is never counted as a control.
 
@@ -207,7 +223,7 @@ Every amount is stored as an **integer number of centavos**. `₱39,900,000.00` 
 
 ### 3.7 DRY
 
-Shared `types/` and `zod` schemas are imported by both route groups. A change to the reservation shape propagates to the portal form, the internal review screen, and the API contract in one edit.
+Shared `zod` schemas and domain types live in `packages/domain` and are imported by both applications. A change to the reservation shape propagates to the portal form, the internal review screen, and the API contract in one edit — and cannot be applied to one app and forgotten in the other.
 
 ### 3.8 KISS & YAGNI
 
@@ -503,100 +519,96 @@ A story is Done only when **all** hold:
 
 ## 5. System Architecture
 
-### 5.1 Application Structure
+### 5.1 Repository Structure
 
-One Next.js application, two route groups. Route groups give complete layout and navigation separation while allowing `lib/`, `components/`, and `types/` to be shared.
+**Two separate applications in one npm-workspaces monorepo.**
+
+The two apps have different audiences, different deployment targets, and different network exposure (§5.7). They build, run, and ship independently — `apps/internal` never appears in the Portal's bundle, and vice versa. The ESLint config forbids either app from importing the other.
+
+What they *do* share is `packages/domain`. That is deliberate and non-negotiable: the pricing engine must be byte-identical in both. If the Portal quoted a buyer ₱2,450,000 and Billing computed ₱2,449,999 because one copy was patched and the other was not, the result is a contractual dispute (§3.1). One package, two consumers, no drift.
 
 ```
-sfsr-rems/
-├── app/
-│   ├── (portal)/                    ← buyer-facing
-│   │   ├── layout.tsx               ← SIDEBAR navigation (explicit client request)
-│   │   ├── page.tsx                 ← landing
-│   │   ├── projects/
-│   │   │   ├── page.tsx             ← all 5 projects
-│   │   │   └── [projectId]/
-│   │   │       ├── page.tsx         ← hero render, details, amenities
-│   │   │       └── units/page.tsx   ← filterable unit inventory
-│   │   ├── units/[unitId]/page.tsx  ← unit detail + floor plan
-│   │   ├── compute/page.tsx         ← sample computation
-│   │   ├── tripping/page.tsx        ← site viewing request
-│   │   ├── reserve/[unitId]/page.tsx ← 8-step wizard
-│   │   └── dashboard/               ← client account area
-│   │       ├── reservations/
-│   │       ├── documents/
-│   │       ├── soa/
-│   │       ├── payments/
-│   │       └── profile/
-│   │
-│   ├── (internal)/                  ← employee-facing
-│   │   ├── layout.tsx               ← sidebar, role-filtered menu
-│   │   ├── dashboard/page.tsx       ← role-specific KPIs
-│   │   ├── inventory/               ← Unit Inventory module
-│   │   ├── reservations/            ← queue + detail + approval
-│   │   ├── verification/
-│   │   │   ├── payments/            ← Account Receivables
-│   │   │   └── documents/           ← Documentation Dept
-│   │   ├── billing/                 ← SOA, payment terms
-│   │   ├── cash/                    ← official receipts, daily collections
-│   │   ├── loans/                   ← Bank / Pag-IBIG monitoring
-│   │   ├── accounting/              ← financial reports
-│   │   ├── clients/                 ← client masterfile
-│   │   ├── scheduling/              ← tripping requests (Sales)
-│   │   ├── announcements/           ← Marketing
-│   │   ├── reports/                 ← incl. Expired Reservation Report
-│   │   ├── audit/                   ← audit trail viewer
-│   │   └── admin/                   ← IT: users, roles, settings
-│   │
-│   ├── (auth)/
-│   │   ├── login/page.tsx
-│   │   ├── register/page.tsx
-│   │   └── reset-password/page.tsx
-│   │
-│   └── api/
-│       ├── auth/resolve-username/route.ts
-│       ├── upload/route.ts          ← Cloudinary signature
-│       ├── ocr/route.ts             ← Cloud Vision
-│       └── reservations/[id]/…
+RealestateManagement/
+├── package.json                     ← workspace root
+├── tsconfig.base.json               ← shared compiler options
+├── eslint.config.mjs                ← incl. the architectural boundary rule
+├── vitest.config.mts
 │
-├── components/
-│   ├── ui/                          ← shadcn/ui primitives
-│   ├── portal/
-│   ├── internal/
-│   └── shared/
-│
-├── lib/
-│   ├── domain/                      ← DOMAIN LAYER (OOP, zero infrastructure imports)
-│   │   ├── entities/       Reservation · Unit · Client · Payment · Document
-│   │   ├── value-objects/  Money · ReservationNumber · UnitId · Percentage
-│   │   ├── pricing/        PricingService · DiscountStrategy hierarchy
-│   │   ├── validation/     DocumentValidator hierarchy
-│   │   ├── services/       ReservationWorkflowService · SoaService
-│   │   ├── repositories/   I*Repository interfaces (ports only)
-│   │   ├── events/         DomainEvent types
-│   │   └── errors/         DomainError · IllegalStateTransitionError
+├── packages/
+│   ├── domain/                      ← DOMAIN LAYER — @sfsr/domain
+│   │   └── src/                       Pure TypeScript. ZERO runtime deps.
+│   │       ├── entities/       Reservation · Unit · Client · Payment · Document
+│   │       ├── value-objects/  Money · ReservationNumber · UnitId · ProjectId
+│   │       ├── pricing/        PricingService · DiscountStrategy hierarchy
+│   │       ├── validation/     DocumentValidator hierarchy
+│   │       ├── services/       ReservationWorkflowService · SoaService
+│   │       ├── repositories/   I*Repository interfaces (ports only)
+│   │       ├── events/         DomainEvent types
+│   │       └── errors/         DomainError · IllegalStateTransitionError
 │   │
-│   ├── infrastructure/              ← DATA INFRASTRUCTURE LAYER (adapters)
-│   │   ├── firestore/      BaseRepository<T> + 15 concrete repositories
-│   │   ├── mappers/        Firestore document ↔ domain entity
-│   │   ├── cloudinary/     CloudinaryStorageAdapter (signed uploads)
-│   │   ├── vision/         CloudVisionOcrAdapter
-│   │   ├── unit-of-work/   FirestoreUnitOfWork (transaction boundary)
-│   │   └── firebase/       client.ts · admin.ts
+│   ├── infrastructure/              ← DATA INFRA LAYER — @sfsr/infrastructure
+│   │   └── src/
+│   │       ├── firestore/      BaseRepository<T> + concrete repositories
+│   │       ├── mappers/        Firestore document ↔ domain entity
+│   │       ├── cloudinary/     CloudinaryStorageAdapter (signed uploads)
+│   │       ├── vision/         CloudVisionOcrAdapter
+│   │       ├── unit-of-work/   FirestoreUnitOfWork (transaction boundary)
+│   │       ├── firebase/       client.ts · admin.ts
+│   │       └── testing/        in-memory fakes for the domain test suite
 │   │
-│   ├── actions/                     ← APPLICATION LAYER (Server Actions)
-│   ├── container.ts                 ← composition root: wires ports to adapters
-│   ├── rbac/      permissions.ts · guards.ts
-│   └── audit/
+│   └── ui/                          ← SHARED UI — @sfsr/ui
+│       └── src/                       shadcn/ui primitives, cross-app components
 │
-├── types/
-├── schemas/                         ← zod, shared client + server
-├── scripts/seed/                    ← .xls → Firestore migration
-├── tests/
-├── middleware.ts                    ← route-group + role gate
+├── apps/
+│   ├── portal/                      ← @sfsr/portal — DEPLOYED PUBLICLY, port 3000
+│   │   ├── app/
+│   │   │   ├── layout.tsx           ← SIDEBAR navigation (explicit client request)
+│   │   │   ├── page.tsx             ← landing
+│   │   │   ├── projects/[projectId]/units/
+│   │   │   ├── units/[unitId]/
+│   │   │   ├── compute/             ← sample computation
+│   │   │   ├── tripping/            ← site viewing request
+│   │   │   ├── reserve/[unitId]/    ← 8-step wizard
+│   │   │   ├── dashboard/           ← reservations · documents · soa · payments
+│   │   │   ├── (auth)/              ← login · register · reset-password
+│   │   │   └── api/
+│   │   │       ├── auth/resolve-username/
+│   │   │       ├── upload/          ← Cloudinary signature
+│   │   │       └── ocr/             ← Cloud Vision
+│   │   ├── lib/container.ts         ← composition root
+│   │   ├── proxy.ts                 ← client-tier gate
+│   │   └── next.config.ts
+│   │
+│   └── internal/                    ← @sfsr/internal — LOCAL LAN ONLY, port 3001
+│       ├── app/
+│       │   ├── layout.tsx           ← sidebar, role-filtered menu
+│       │   ├── dashboard/           ← role-specific KPIs
+│       │   ├── inventory/           ← Unit Inventory module
+│       │   ├── reservations/        ← queue · detail · approval
+│       │   ├── verification/        ← payments (AR) · documents (Documentation)
+│       │   ├── billing/  cash/  loans/  accounting/
+│       │   ├── clients/  scheduling/  announcements/
+│       │   ├── reports/             ← incl. Expired Reservation Report
+│       │   ├── audit/               ← audit trail viewer
+│       │   └── admin/               ← IT: users, roles, settings
+│       ├── lib/container.ts
+│       ├── proxy.ts                 ← employee-claim gate
+│       └── next.config.ts
+│
+├── scripts/seed/                    ← .xls → JSON fixtures → Firestore
 ├── firestore.rules
 └── .env.local
 ```
+
+**Commands**
+
+| Task | Command |
+|---|---|
+| Portal, development | `npm run dev:portal` → `localhost:3000` |
+| Internal, development | `npm run dev:internal` → `localhost:3001` |
+| Portal, production build | `npm run build:portal` |
+| Internal, run on the office server | `npm run build:internal && npm run start:internal` |
+| Full verification | `npm run verify` (typecheck → lint → test) |
 
 > **Client portal navigation is a sidebar.** This is an explicit instruction from `RESERVATION.doc`:
 > *"Gusto ko din sana ang menu(option) pag sa portal na ni buyer is nasa gilid. Mas neat kasi tignan. Para nasa isang side lang. gaya sa picture."*
@@ -614,7 +626,7 @@ usernames/{username} → { email, uid }  ← private collection, no client read
    ↓
 signInWithEmailAndPassword(email, password)
    ↓
-Custom claims { role, department, accountType } → middleware + Firestore Rules
+Custom claims { role, department, accountType } → proxy.ts + Firestore Rules
 ```
 
 The `usernames` collection is unreadable by clients, so the index cannot be enumerated to harvest registered accounts.
@@ -820,6 +832,65 @@ export const reservationWorkflow = new ReservationWorkflowService(
 ```
 
 No DI framework — a plain object is sufficient at this scale and keeps §3.8 (KISS) honest.
+
+### 5.7 Deployment Topology
+
+The two applications have **different network exposure**. This is a client requirement, not an implementation detail.
+
+```
+        INTERNET                          ST. FRANCIS SQUARE OFFICE (LAN)
+   ┌──────────────────┐                  ┌──────────────────────────────────┐
+   │                  │                  │                                  │
+   │   Buyers /       │                  │   Staff workstations (25)        │
+   │   Prospective    │                  │   browser only — no app, no keys │
+   │   Clients        │                  │             │                    │
+   │        │         │                  │             ▼                    │
+   │        ▼         │                  │   ┌──────────────────────┐       │
+   │  ┌────────────┐  │                  │   │  Office LAN server   │       │
+   │  │  @sfsr/    │  │                  │   │  @sfsr/internal      │       │
+   │  │  portal    │  │                  │   │  npm start :3001     │       │
+   │  │  (Vercel)  │  │                  │   │  http://<office-ip>  │       │
+   │  └─────┬──────┘  │                  │   └──────────┬───────────┘       │
+   └────────┼─────────┘                  └──────────────┼───────────────────┘
+            │                                           │
+            │        ┌───────────────────────┐          │
+            └───────►│   Cloud Firestore     │◄─────────┘
+                     │   project: sfsr-rems  │
+                     │                       │
+                     │   THE CONNECTION      │
+                     └───────────────────────┘
+                                │
+                     ┌──────────┴───────────┐
+                     │  Cloudinary  ·  Cloud Vision
+                     └──────────────────────┘
+```
+
+| | Portal | Internal |
+|---|---|---|
+| Package | `@sfsr/portal` | `@sfsr/internal` |
+| Audience | Buyers, prospective clients | 25 employees, 8 departments |
+| Hosting | **Vercel — public internet** | **One office PC on the LAN** |
+| Port | 3000 | 3001 (`--hostname 0.0.0.0`) |
+| Reachable from | Anywhere | Office network only |
+| Firebase Admin key | Vercel env vars | The LAN server only — **not** on workstations |
+| Public DNS | Yes | No |
+
+**How they stay in sync.** Both apps read and write the same Cloud Firestore project. When a buyer submits a reservation on the Portal, the submit transaction (§5.3) flips the unit to `On Hold`; a Firestore listener in the Internal app reflects that immediately in the Unit Inventory and the Account Receivables queue. No API between the two apps, no polling, no sync job — the database *is* the integration point. This is exactly what `RESERVATION.doc` requires:
+
+> *"…the selected condominium unit is automatically tagged as 'On Hold' … across both the Web-Based Real Estate Portal and the Internal Management System."*
+
+**Why the Internal app is not deployed.** Keeping it off the public internet removes the entire class of attacks that begin with an attacker reaching the admin login page. It is the outermost of four controls, not a replacement for the other three (§3.3) — Firestore Security Rules still enforce every role boundary, because a compromised workstation is inside the LAN.
+
+**Why one LAN server rather than 25 local installs.** The Firebase Admin service account can mint tokens for any user and bypasses Security Rules entirely. On 25 workstations that is 25 copies of a key that grants total database access, on machines nobody audits. On one server it is one copy, in one place, with one set of backups. Staff reach it over HTTP like any intranet site.
+
+**Consequences to plan for:**
+
+| Consequence | Handling |
+|---|---|
+| The office server is a single point of failure | Internal work stops if it is down; the Portal keeps accepting reservations, and the queue drains when it returns |
+| No HTTPS on a bare LAN deployment | Firebase Auth tokens would travel in the clear. Sprint 7: self-signed certificate or a reverse proxy |
+| Staff cannot work off-site | Accepted for the capstone; a VPN is the production answer |
+| Two builds to keep in step | `npm run verify` at the workspace root typechecks, lints, and tests both apps plus the shared packages |
 
 ---
 
@@ -1209,19 +1280,39 @@ BIR Form No. 1904 / TIN · Proof of Billing · Certificate of Employment / Proof
 
 ### Sprint 0 — Foundation & Data Migration *(Weeks 1–2)*
 
-- Scaffold Next.js 15 + TypeScript strict + Tailwind v4 + shadcn/ui
-- **Establish the four-layer structure** (§5.5): `lib/domain/`, `lib/infrastructure/`, `lib/actions/`, plus the ESLint `no-restricted-imports` boundary rule
-- **Domain primitives**: `Money` value object with full test coverage, `DomainError` hierarchy, `Entity` base class
-- **`FirestoreRepository<T>` base class**, `EntityMapper<T>` contract, `FirestoreUnitOfWork`, `lib/container.ts` composition root
-- Migrate `.env`: `VITE_*` → `NEXT_PUBLIC_*`; add server-only Cloudinary secrets
-- Firebase client and Admin SDK initialization
-- Firestore Security Rules skeleton — deny by default
-- Username-based authentication (`/api/auth/resolve-username`), registration, password reset
-- RBAC: custom claims, `middleware.ts`, `lib/rbac/`
-- Audit log service
-- Cloudinary signed-upload route
-- Seed scripts: projects, 150 units, 125 parking slots, 25 employees, 21 sales staff
-- Base layouts: portal sidebar, internal sidebar with role-filtered menu
+Status legend: ✅ done · ◻ outstanding
+
+**Workspace foundation**
+- ✅ npm-workspaces monorepo: `packages/domain`, `packages/infrastructure`, `packages/ui`, `apps/portal`, `apps/internal` (§5.1)
+- ✅ Next.js 16.2 · React 19.2 · TypeScript 6.0 (`strict` + `noUncheckedIndexedAccess` + `noImplicitOverride`) · Tailwind 4.3
+- ✅ ESLint flat config with the **architectural boundary rule** — verified by probe: a `firebase/firestore` import inside `packages/domain` fails the lint (§5.5)
+- ✅ Second boundary rule: the two apps cannot import from each other (§5.7)
+- ✅ `.gitignore` rewritten — `.env` was **not** ignored despite claiming to be (§12.17)
+- ✅ `.env.local` migrated `VITE_*` → `NEXT_PUBLIC_*`, server-only secrets separated below a divider; `.env.example` committed
+- ◻ shadcn/ui initialised into `packages/ui`
+
+**Domain layer** (`@sfsr/domain`, zero runtime dependencies)
+- ✅ `Money` value object — private constructor, immutable, `divideIntoInstalments` proven to close exactly across all 30 tier × term combinations
+- ✅ `DomainError` hierarchy — `InvalidValueError`, `IllegalStateTransitionError`, `UnitNotAvailableError`
+- ✅ Identifier value objects — `ProjectId`, `UnitId`, `ParkingSlotId`, `ClientId`, `EmployeeId`, `SalesStaffId`, `ReservationNumber`
+- ✅ `DiscountStrategy` hierarchy + `DiscountStrategyFactory` (§3.9)
+- ✅ `PricingService` — matches the published §8.3 table exactly; **33 tests passing**
+- ◻ `Reservation` and `Unit` entities with the §8.4 transition table
+
+**Data infrastructure layer** (`@sfsr/infrastructure`)
+- ◻ Firebase client and Admin SDK initialisation
+- ◻ `FirestoreRepository<T>` base class, `EntityMapper<T>` contract, `FirestoreUnitOfWork`
+- ◻ In-memory fake repositories for the domain test suite
+- ◻ `lib/container.ts` composition root in each app
+
+**Application**
+- ◻ Firestore Security Rules skeleton — deny by default
+- ◻ Username-based authentication (`/api/auth/resolve-username`), registration, password reset
+- ◻ RBAC: custom claims, `proxy.ts` in each app, `lib/rbac/`
+- ◻ Audit log service
+- ◻ Cloudinary signed-upload route
+- ◻ Seed pipeline: `.xls` → JSON fixtures → Firestore (5 projects, 150 units, 125 parking slots, 25 employees, 21 sales staff)
+- ◻ Base layouts: portal sidebar, internal sidebar with role-filtered menu
 
 **Increment:** an employee and a buyer can each log in and land on an empty, correctly-gated dashboard.
 
@@ -1366,6 +1457,24 @@ Findings from analysis of the source artifacts. Each must be resolved by its tar
 | 1 | `.env` uses `VITE_*` prefixes; its comment reads *"Both apps read this single file via Vite's `envDir` setting"* — a leftover from a Vite plan. `instruction.txt` specifies Next.js. | Rename all to `NEXT_PUBLIC_*`. | Dev | 0 |
 | 2 | Cloudinary preset `sfsr_uploads` is **unsigned** — anyone with cloud name `riayd2nv` can upload, and assets are URL-reachable. | Add signed-upload route + `type: 'authenticated'` delivery for sensitive documents. Add `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` as server-only vars. | Dev | 0 |
 | 3 | `RBAC.xls` contains **25 plaintext passwords** (`Admin@123`, `Cash@123`, `Loan@123`, …). | Seed via Admin SDK, then discard. Every account carries `mustChangePassword: true`. Never store the plaintext. | Dev | 0 |
+| 17 | ⚠ **`.gitignore` did not ignore `.env`.** It contained one line, `instruction.txt`, while `.env` — holding the live Firebase and Cloudinary credentials — carried a header claiming *"This file is gitignored — do not commit it."* Nothing leaked because the folder was never a git repository. | ✅ **Fixed in Sprint 0.** `.gitignore` rewritten to cover `.env`, `.env.*`, service-account JSON, build output. Verify before the first `git init`. | Dev | 0 |
+| 18 | `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` are still blank in `.env.local`. | Blocks signed uploads (§2.4), so no government ID can be accepted. Obtain from Cloudinary Console → Settings → API Keys. | **Client** | 0 |
+| 19 | `FIREBASE_ADMIN_CLIENT_EMAIL` and `FIREBASE_ADMIN_PRIVATE_KEY` are still blank. | Blocks the seed pipeline and username resolution. Firebase Console → Project Settings → Service accounts. | **Client** | 0 |
+
+| 25 | ⚠ **The Firebase project `sfsr-rems` was not empty.** A read-only survey found **12 Auth users** (created 28 Jul 2026, several signed in 30 Jul) and a `/documents` collection with **6 records** carrying `ocr`, `backOcr`, `validation`, `reviewedBy`, `reviewNote` and `payment` fields — a prior working implementation of §9, almost certainly the Vite app the original `.env` header referred to. None of the 12 users carry custom claims, so its auth model differs from §5.2. | ✅ **Resolved.** New project `sfsr-rems-next` created; the original is left untouched. Nothing was overwritten. | Dev | 0 |
+| 26 | The Firebase service account key downloads as `<project>-firebase-adminsdk-<hash>.json`, matching **none** of the `.gitignore` credential patterns. One such key was found sitting unignored in the repo root. | ✅ **Fixed.** Added `*firebase-adminsdk*.json`, `*.credentials.json`, `secrets/`. Second credential-exposure gap found in this repo — audit `.gitignore` before the first `git init`. | Dev | 0 |
+| 27 | **One service account serves both apps, and it bypasses every Firestore Security Rule.** A Firebase service account is scoped to the *project*, not to an app, so the same full-admin credential is deployed to Vercel (public internet) and to the office LAN server. The Portal's copy is the more exposed of the two and needs far less power — it only resolves usernames, signs Cloudinary uploads, and runs the reservation transaction. | Split into two service accounts with distinct IAM roles: a narrow one for the Portal, a broad one for the Internal system. Contradicts §3.4 (Least Privilege) until done. Acceptable for the defense build; required before real office use. | Dev | 7 |
+
+| 28 | **The `Department` column cannot drive permissions.** Nine employees (`EMP011`–`EMP019`) all record "Loans Management Department", but `USER ROLE ACCESS` splits them across **three roles with materially different rights** — Documentation (full CRUD on the client masterfile), Billing (SOA generation and sending), Loan Officer (view and print only). The only field that separates them is which sheet of `RBAC.xls` a person appears on. | ✅ **Resolved.** `resolveRoleFromSheet()` maps sheet → role; the seed writes the resolved role into the Firebase custom claim, not the department. Verified: 9 employees → 3 roles, 3 each. | Dev | 0 |
+| 29 | **`USER ROLE ACCESS` has one IT row, but the IT sheet has three seniority levels** — System Administrator (`EMP001`), IT Supervisor (`EMP002`), IT Staff (`EMP003`, `EMP004`). The matrix grants "Full Access to All Modules" to "IT Administrator" without distinguishing, so all four currently receive all 20 modules including delete. | Confirm whether IT Staff should hold full delete across every module. Least Privilege (§3.4) suggests a narrower `IT_STAFF` role with view + support access. Currently follows the source document literally. | **Client** | 1 |
+
+**Framework versions**
+
+| # | Finding | Resolution | Owner | Sprint |
+|---|---|---|---|---|
+| 20 | Installed versions are newer than this plan originally assumed: **Next.js 16.2.12** (not 15), **TypeScript 6.0.3**, **Zod 4.4.3**, **Tailwind 4.3.3**. | ✅ §2.1 updated to the verified versions. Zod 4 changed several validator APIs — use `z.email()`, not `z.string().email()`. | Dev | 0 |
+| 21 | **Next.js 16 deprecated the `middleware.ts` convention** in favour of `proxy.ts`. Confirmed against the installed package's own build warning. | ✅ All references updated. Each app gets its own `proxy.ts`. | Dev | 0 |
+| 22 | `eslint-config-next` v16 ships **native flat config**; the `FlatCompat` shim documented for v15 throws `TypeError: Converting circular structure to JSON`. | ✅ Config imports `eslint-config-next/core-web-vitals` and `/typescript` directly. | Dev | 0 |
 
 ### Authentication
 
@@ -1397,6 +1506,8 @@ Findings from analysis of the source artifacts. Each must be resolved by its tar
 | # | Finding | Resolution | Owner | Sprint |
 |---|---|---|---|---|
 | 14 | Two SLAs coexist — **30 calendar days** to submit documentary requirements, **24 hours** to cure a deficiency. | Implement both timers independently; surface both in the client portal. | Dev | 5 |
+| 23 | The Internal system runs on a bare LAN server with **no HTTPS**, so Firebase Auth tokens would cross the office network in the clear (§5.7). | Self-signed certificate or a reverse proxy on the office server. Acceptable for the defense demo; required before real office use. | Dev | 7 |
+| 24 | The office LAN server is a **single point of failure** for all internal work. | Accepted. The Portal keeps accepting reservations while it is down and the queues drain on restart. Document the restart procedure in the user manual. | Dev | 7 |
 | 15 | The ₱50,000 reservation fee is stated as a fixed value in the requirements. | Store in `settings` so it can be changed without a redeploy. | Dev | 3 |
 | 16 | The promotional discount base changes between tiers — 20% applies to the *down payment*, 30–50% apply to the *total purchase price*. | Implemented as transcribed. Verified monotonic (§8.3). Confirm the intent with the client before Sprint 3. | **Client** | 3 |
 

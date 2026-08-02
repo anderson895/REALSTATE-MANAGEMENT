@@ -1,0 +1,51 @@
+{
+  "indexes": [
+    {
+      "comment": "Portal unit browser: available units within a project (FirestoreUnitRepository.findAvailableByProject).",
+      "collectionGroup": "units",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "purchasePriceCentavos", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "comment": "Client dashboard: a buyer's reservations, newest first (FirestoreReservationRepository.findByClient).",
+      "collectionGroup": "reservations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "clientId", "order": "ASCENDING" },
+        { "fieldPath": "reservedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "comment": "Internal verification queues: reservations by status, oldest first.",
+      "collectionGroup": "reservations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "reservedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "comment": "Expired Reservation Report: overdue deficiencies (Development Plan.md §8.5).",
+      "collectionGroup": "reservations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "deficiencyDueAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "comment": "Documentation verification queue: pending documents oldest first.",
+      "collectionGroup": "documents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "uploadedAt", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

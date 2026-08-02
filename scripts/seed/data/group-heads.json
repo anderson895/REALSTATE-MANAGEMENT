@@ -1,0 +1,26 @@
+[
+    {
+        "id":  "GH001",
+        "name":  "Maria Theresa Santos",
+        "position":  "Sales Group Head",
+        "mobile":  "0917-800-1001",
+        "email":  "mtsantos@sfsrc.com",
+        "status":  "Active"
+    },
+    {
+        "id":  "GH002",
+        "name":  "Jonathan Reyes",
+        "position":  "Sales Group Head",
+        "mobile":  "0917-800-1002",
+        "email":  "jreyes@sfsrc.com",
+        "status":  "Active"
+    },
+    {
+        "id":  "GH003",
+        "name":  "Christine Lim",
+        "position":  "Sales Group Head",
+        "mobile":  "0917-800-1003",
+        "email":  "clim@sfsrc.com",
+        "status":  "Active"
+    }
+]

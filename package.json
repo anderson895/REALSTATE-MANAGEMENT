@@ -1,0 +1,42 @@
+{
+  "name": "sfsr-rems",
+  "version": "0.1.0",
+  "private": true,
+  "description": "St. Francis Square Realty Real Estate Management System — monorepo root",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:portal": "npm run dev --workspace @sfsr/portal",
+    "dev:internal": "npm run dev --workspace @sfsr/internal",
+    "build:portal": "npm run build --workspace @sfsr/portal",
+    "build:internal": "npm run build --workspace @sfsr/internal",
+    "start:internal": "npm run start --workspace @sfsr/internal",
+    "lint": "eslint .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify": "npm run typecheck && npm run lint && npm run test",
+    "seed:extract": "powershell -ExecutionPolicy Bypass -File scripts/seed/extract-xls.ps1",
+    "seed:load": "tsx scripts/seed/load.ts"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.6",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^26.1.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.2.12",
+    "jsdom": "^29.1.1",
+    "tsx": "^4.23.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  },
+  "engines": {
+    "node": ">=20.11"
+  }
+}

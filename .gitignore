@@ -1,1 +1,49 @@
+# ── Secrets ───────────────────────────────────────────────────────────────
+# .env holds live Firebase and Cloudinary credentials. Despite its own header
+# claiming "This file is gitignored", it was NOT listed here before Sprint 0.
+.env
+.env.*
+!.env.example
+# Firebase Console downloads keys as <project>-firebase-adminsdk-<hash>.json,
+# which matched none of the usual patterns. Broadened after one such key was
+# found sitting unignored in the project root.
+*firebase-adminsdk*.json
+*-service-account*.json
+*serviceAccountKey*.json
+gcp-credentials*.json
+*.credentials.json
+secrets/
+
+# ── Dependencies ──────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.*
+
+# ── Next.js ───────────────────────────────────────────────────────────────
+.next/
+out/
+build/
+next-env.d.ts
+
+# ── Testing ───────────────────────────────────────────────────────────────
+coverage/
+.vitest/
+test-results/
+playwright-report/
+
+# ── Firebase ──────────────────────────────────────────────────────────────
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# ── Misc ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.pem
+npm-debug.log*
+yarn-error.log*
+.vercel
+*.tsbuildinfo
+# ── Kept out of the repo by the project owner ─────────────────────────────
 instruction.txt

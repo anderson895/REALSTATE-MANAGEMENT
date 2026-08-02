@@ -1,0 +1,204 @@
+rules_version = '2';
+
+// SFSR-REMS Firestore Security Rules
+//
+// Layer 3 of three (Development Plan.md §3.3). The proxy gate and the route
+// handlers can both be bypassed by anyone talking to Firestore directly; this
+// layer cannot. It is the only authorisation that the database itself enforces.
+//
+// Deny by default: there is no catch-all allow. A collection not listed here
+// is unreachable from any client (§3.4, Fail-Safe Defaults).
+//
+// NOTE: the Admin SDK bypasses every rule in this file. Server code is trusted
+// by design — see §12.27 on splitting the service account for least privilege.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function claims() {
+      return request.auth.token;
+    }
+
+    function isEmployee() {
+      return signedIn() && claims().get('kind', '') == 'employee';
+    }
+
+    function isClient() {
+      return signedIn() && claims().get('kind', '') == 'client';
+    }
+
+    function role() {
+      return isEmployee() ? claims().get('role', '') : '';
+    }
+
+    function hasRole(allowed) {
+      return role() in allowed;
+    }
+
+    // There is deliberately no isSupervisor() helper here.
+    //
+    // "All Supervisor per personnel is the approver of the transaction" is a
+    // real rule, but it is enforced in Reservation.approve(by, isSupervisor)
+    // and re-checked by can(actor, module, 'approve') on the server. Approvals
+    // never arrive from a browser — every reservation write below is
+    // `allow write: if false` — so a supervisor clause in these rules would be
+    // unreachable code implying a control that is not actually here.
+
+    function isAdmin() {
+      return role() == 'IT_ADMINISTRATOR';
+    }
+
+    // A Permanent Client; an Initial Account has tier == 'INITIAL'.
+    function isPermanentClient() {
+      return isClient() && claims().get('tier', '') == 'PERMANENT';
+    }
+
+    function owns(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // ── Inventory — public read ────────────────────────────────────────────
+    // RESERVATION.doc grants a Guest User "View all project details", so these
+    // are readable without a session. Writes are staff-only.
+
+    match /projects/{projectId} {
+      allow read: if true;
+      allow write: if isAdmin() || hasRole(['MARKETING']);
+    }
+
+    match /units/{unitId} {
+      allow read: if true;
+      // Status changes flow through the Admin SDK inside a transaction, never
+      // from a browser. Only inventory managers may edit directly.
+      allow write: if isAdmin();
+    }
+
+    match /parkingSlots/{slotId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── Client accounts ────────────────────────────────────────────────────
+
+    match /clients/{clientUid} {
+      // A buyer sees their own record. Staff who work the file may read it:
+      // Documentation owns the masterfile, Loans and Legal are granted
+      // "View Client profile" in USER ROLE ACCESS.
+      allow read: if owns(clientUid)
+                  || hasRole(['IT_ADMINISTRATOR', 'DOCUMENTATION', 'LOAN_OFFICER',
+                              'LEGAL_COUNSEL', 'ACCOUNT_RECEIVABLES']);
+      allow create: if owns(clientUid);
+      allow update: if owns(clientUid) || hasRole(['IT_ADMINISTRATOR', 'DOCUMENTATION']);
+      // Client records are retained for audit — never deleted from a client.
+      allow delete: if false;
+    }
+
+    // ── Employees ──────────────────────────────────────────────────────────
+
+    match /employees/{employeeId} {
+      allow read: if isEmployee();
+      allow write: if isAdmin();
+    }
+
+    match /salesOrg/{staffId} {
+      allow read: if isEmployee();
+      allow write: if isAdmin();
+    }
+
+    // ── Reservations ───────────────────────────────────────────────────────
+
+    match /reservations/{reservationNo} {
+      allow read: if isClient() && resource.data.clientId == request.auth.uid
+                  || hasRole(['IT_ADMINISTRATOR', 'ACCOUNT_RECEIVABLES', 'DOCUMENTATION',
+                              'BILLING', 'LOAN_OFFICER', 'CASH_CLERK', 'SALES']);
+      // Every write runs server-side inside a transaction that also updates the
+      // unit and the audit log. Allowing browser writes would let a client
+      // change its own status.
+      allow write: if false;
+    }
+
+    // ── Payments and documents ─────────────────────────────────────────────
+
+    match /payments/{paymentId} {
+      allow read: if isClient() && resource.data.clientId == request.auth.uid
+                  || hasRole(['IT_ADMINISTRATOR', 'ACCOUNT_RECEIVABLES', 'BILLING',
+                              'CASH_CLERK', 'ACCOUNTING']);
+      allow write: if false;
+    }
+
+    match /documents/{documentId} {
+      allow read: if isClient() && resource.data.buyerUid == request.auth.uid
+                  || hasRole(['IT_ADMINISTRATOR', 'DOCUMENTATION', 'LOAN_OFFICER',
+                              'LEGAL_COUNSEL']);
+      // Buyers upload; the OCR and validation fields are written server-side.
+      allow create: if isClient() && request.resource.data.buyerUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ── Statements of account ──────────────────────────────────────────────
+
+    match /soa/{soaId} {
+      // "View Statement of Account (SOA)" is a Permanent Client feature only.
+      allow read: if isPermanentClient() && resource.data.clientId == request.auth.uid
+                  || hasRole(['IT_ADMINISTRATOR', 'BILLING', 'ACCOUNTING',
+                              'ACCOUNT_RECEIVABLES', 'LOAN_OFFICER']);
+      allow write: if false;
+    }
+
+    // ── Scheduling and announcements ───────────────────────────────────────
+
+    match /trippings/{trippingId} {
+      allow read: if isClient() && resource.data.clientId == request.auth.uid
+                  || hasRole(['IT_ADMINISTRATOR', 'SALES', 'ACCOUNT_RECEIVABLES']);
+      allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
+      allow update: if hasRole(['IT_ADMINISTRATOR', 'SALES']);
+      allow delete: if false;
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow write: if hasRole(['IT_ADMINISTRATOR', 'MARKETING']);
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if owns(resource.data.recipientUid);
+      allow write: if false;
+    }
+
+    // ── Audit trail — append only ──────────────────────────────────────────
+    // RBAC.xls assigns "audit trail monitoring" to IT and "audit trail reports"
+    // to Account Receivables. Neither may edit it. No role gets update or
+    // delete, including IT_ADMINISTRATOR — a log an administrator can rewrite
+    // provides no assurance (§3.6).
+
+    match /auditLogs/{entryId} {
+      allow read: if hasRole(['IT_ADMINISTRATOR', 'ACCOUNT_RECEIVABLES']);
+      allow create: if false;   // server-side only, inside the transaction
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // ── Server-only collections ────────────────────────────────────────────
+    // Reachable through the Admin SDK, invisible to every browser.
+
+    match /usernames/{username} {
+      // Readable would let anyone enumerate registered accounts.
+      allow read, write: if false;
+    }
+
+    match /counters/{counterId} {
+      allow read, write: if false;
+    }
+
+    match /settings/{settingId} {
+      allow read: if isEmployee();
+      allow write: if isAdmin();
+    }
+  }
+}

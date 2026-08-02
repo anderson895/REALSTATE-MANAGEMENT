@@ -1,0 +1,110 @@
+[
+    {
+        "id":  "AG001",
+        "name":  "John Paul Ramos",
+        "mobile":  "0917-810-1001",
+        "email":  "jramos@sfsrc.com",
+        "broker":  "Anthony Dela Cruz",
+        "groupHead":  "Maria Theresa Santos",
+        "status":  "Active"
+    },
+    {
+        "id":  "AG002",
+        "name":  "Michelle Aquino",
+        "mobile":  "0917-810-1002",
+        "email":  "maquino@sfsrc.com",
+        "broker":  "Anthony Dela Cruz",
+        "groupHead":  "Maria Theresa Santos",
+        "status":  "Active"
+    },
+    {
+        "id":  "AG003",
+        "name":  "Kevin Santos",
+        "mobile":  "0917-810-1003",
+        "email":  "ksantos@sfsrc.com",
+        "broker":  "Patricia Gomez",
+        "groupHead":  "Maria Theresa Santos",
+        "status":  "Active"
+    },
+    {
+        "id":  "AG004",
+        "name":  "Diane Cruz",
+        "mobile":  "0917-810-1004",
+        "email":  "dcruz@sfsrc.com",
+        "broker":  "Patricia Gomez",
+        "groupHead":  "Maria Theresa Santos",
+        "status":  "Active"
+    },
+    {
+        "id":  "AG005",
+        "name":  "Mark Bautista",
+        "mobile":  "0917-810-1005",
+        "email":  "mbautista@sfsrc.com",
+        "broker":  "Michael Tan",
+        "groupHead":  "Jonathan Reyes",
+        "status":  "Active"
+    },
+    {
+        "id":  "AG006",
+        "name":  "Alyssa Garcia",
+        "mobile":  "0917-810-1006",
+        "email":  "agarcia@sfsrc.com",
+        "broker":  "Michael Tan",
+        "groupHead":  "Jonathan Reyes",
+        "status":  "Active"
+    },
+    {
+        "id":  "AG007",
+        "name":  "Joshua Fernandez",
+        "mobile":  "0917-810-1007",
+        "email":  "jfernandez@sfsrc.com",
+        "broker":  "Grace Villanueva",
+        "groupHead":  "Jonathan Reyes",
+        "status":  "Active"
+    },
+    {
+        "id":  "AG008",
+        "name":  "Karen Lopez",
+        "mobile":  "0917-810-1008",
+        "email":  "klopez@sfsrc.com",
+        "broker":  "Grace Villanueva",
+        "groupHead":  "Jonathan Reyes",
+        "status":  "Active"
+    },
+    {
+        "id":  "AG009",
+        "name":  "Vincent Perez",
+        "mobile":  "0917-810-1009",
+        "email":  "vperez@sfsrc.com",
+        "broker":  "Carlo Mendoza",
+        "groupHead":  "Christine Lim",
+        "status":  "Active"
+    },
+    {
+        "id":  "AG010",
+        "name":  "Angela Navarro",
+        "mobile":  "0917-810-1010",
+        "email":  "anavarro@sfsrc.com",
+        "broker":  "Carlo Mendoza",
+        "groupHead":  "Christine Lim",
+        "status":  "Active"
+    },
+    {
+        "id":  "AG011",
+        "name":  "Bryan Castillo",
+        "mobile":  "0917-810-1011",
+        "email":  "bcastillo@sfsrc.com",
+        "broker":  "Joanna Flores",
+        "groupHead":  "Christine Lim",
+        "status":  "Active"
+    },
+    {
+        "id":  "AG012",
+        "name":  "Camille Torres",
+        "mobile":  "0917-810-1012",
+        "email":  "ctorres@sfsrc.com",
+        "broker":  "Joanna Flores",
+        "groupHead":  "Christine Lim",
+        "status":  "Active"
+    }
+]

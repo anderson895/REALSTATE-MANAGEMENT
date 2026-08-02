@@ -1,0 +1,40 @@
+/*
+ * Shared SFSR-REMS theme.
+ *
+ * Tailwind v4 is CSS-first — there is no tailwind.config.js. Each app imports
+ * this file after `@import "tailwindcss"` so both surfaces share one palette
+ * without duplicating it.
+ */
+
+@theme {
+  /* St. Francis Square Realty — deep green, drawn from the project renders. */
+  --color-brand-50: oklch(0.97 0.02 155);
+  --color-brand-100: oklch(0.94 0.04 155);
+  --color-brand-200: oklch(0.88 0.07 155);
+  --color-brand-300: oklch(0.79 0.11 155);
+  --color-brand-400: oklch(0.68 0.14 155);
+  --color-brand-500: oklch(0.58 0.14 155);
+  --color-brand-600: oklch(0.48 0.12 155);
+  --color-brand-700: oklch(0.39 0.10 155);
+  --color-brand-800: oklch(0.31 0.08 155);
+  --color-brand-900: oklch(0.24 0.06 155);
+
+  /* Unit lifecycle colours, used by both apps so a status never looks
+     different depending on which system you are in (§3.1). */
+  --color-status-available: oklch(0.62 0.15 155);
+  --color-status-hold: oklch(0.75 0.15 75);
+  --color-status-sold: oklch(0.58 0.18 25);
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Peso figures must line up in tables — tabular numerals, everywhere. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}

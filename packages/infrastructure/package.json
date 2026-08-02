@@ -1,0 +1,27 @@
+{
+  "name": "@sfsr/infrastructure",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SFSR-REMS data infrastructure layer — Firestore repositories, Cloudinary and Cloud Vision adapters.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/server.ts",
+    "./testing": "./src/testing/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google-cloud/vision": "^5.3.7",
+    "@sfsr/domain": "*",
+    "cloudinary": "^2.10.0",
+    "fastest-levenshtein": "^1.0.16",
+    "firebase": "^12.17.0",
+    "firebase-admin": "^14.2.0",
+    "server-only": "^0.0.1"
+  },
+  "comment": "'.' is client-safe. '/server' pulls in firebase-admin and must never reach a browser bundle."
+}

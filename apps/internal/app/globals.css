@@ -1,0 +1,6 @@
+@import 'tailwindcss';
+@import '@sfsr/ui/styles.css';
+
+/* Tailwind v4 auto-detects sources next to this file; workspace packages need
+   declaring explicitly or their classes get tree-shaken out. */
+@source '../../../packages/ui/src';

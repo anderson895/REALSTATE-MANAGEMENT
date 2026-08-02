@@ -1,0 +1,56 @@
+[
+    {
+        "id":  "BR001",
+        "name":  "Anthony Dela Cruz",
+        "prcLicenseNo":  "PRC-2025-100101",
+        "mobile":  "0917-900-1001",
+        "email":  "adelacruz@broker.com",
+        "groupHead":  "Maria Theresa Santos",
+        "status":  "Accredited"
+    },
+    {
+        "id":  "BR002",
+        "name":  "Patricia Gomez",
+        "prcLicenseNo":  "PRC-2025-100102",
+        "mobile":  "0917-900-1002",
+        "email":  "pgomez@broker.com",
+        "groupHead":  "Maria Theresa Santos",
+        "status":  "Accredited"
+    },
+    {
+        "id":  "BR003",
+        "name":  "Michael Tan",
+        "prcLicenseNo":  "PRC-2025-100103",
+        "mobile":  "0917-900-1003",
+        "email":  "mtan@broker.com",
+        "groupHead":  "Jonathan Reyes",
+        "status":  "Accredited"
+    },
+    {
+        "id":  "BR004",
+        "name":  "Grace Villanueva",
+        "prcLicenseNo":  "PRC-2025-100104",
+        "mobile":  "0917-900-1004",
+        "email":  "gvillanueva@broker.com",
+        "groupHead":  "Jonathan Reyes",
+        "status":  "Accredited"
+    },
+    {
+        "id":  "BR005",
+        "name":  "Carlo Mendoza",
+        "prcLicenseNo":  "PRC-2025-100105",
+        "mobile":  "0917-900-1005",
+        "email":  "cmendoza@broker.com",
+        "groupHead":  "Christine Lim",
+        "status":  "Accredited"
+    },
+    {
+        "id":  "BR006",
+        "name":  "Joanna Flores",
+        "prcLicenseNo":  "PRC-2025-100106",
+        "mobile":  "0917-900-1006",
+        "email":  "jflores@broker.com",
+        "groupHead":  "Christine Lim",
+        "status":  "Accredited"
+    }
+]

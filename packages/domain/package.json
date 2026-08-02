@@ -1,0 +1,21 @@
+{
+  "name": "@sfsr/domain",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SFSR-REMS domain layer — entities, value objects, pricing rules. Pure TypeScript.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./errors": "./src/errors/index.ts",
+    "./value-objects": "./src/value-objects/index.ts",
+    "./pricing": "./src/pricing/index.ts",
+    "./entities": "./src/entities/index.ts",
+    "./repositories": "./src/repositories/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "comment": "INTENTIONALLY has zero runtime dependencies. See Development Plan.md §5.5 — the domain layer must not import firebase, cloudinary, next, or react. Enforced by eslint no-restricted-imports."
+}

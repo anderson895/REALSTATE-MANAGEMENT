@@ -1,0 +1,57 @@
+[
+    {
+        "id":  "TLP001",
+        "name":  "The Legaspi Place",
+        "code":  "TLP001",
+        "developer":  "St. Francis Square Realty Corporation",
+        "location":  "Legazpi Village, Makati City",
+        "buildingType":  "Premium Mixed-Use High-Rise Condominium",
+        "floorsRaw":  "42",
+        "theme":  "Modern urban living in the heart of Makati.",
+        "sourceSheet":  "\u0027legaspi place$\u0027"
+    },
+    {
+        "id":  "EPR002",
+        "name":  "Emerald Park Residences",
+        "code":  "EPR002",
+        "developer":  "St. Francis Square Realty Corporation",
+        "location":  "ASEANA, Parañaque City",
+        "buildingType":  "Premium High-Rise Condominium",
+        "floorsRaw":  "35",
+        "theme":  "Modern City Living with Landscaped Gardens",
+        "sourceSheet":  "Emerald$"
+    },
+    {
+        "id":  "SQR003",
+        "name":  "Skyline Quarter Residences",
+        "code":  "SQR003",
+        "developer":  "St. Francis Square Realty Corporation",
+        "location":  "Ortigas Center, Pasig City",
+        "buildingType":  "Twin Residential Towers",
+        "floorsRaw":  "40 Floors",
+        "theme":  "Business and Lifestyle Community",
+        "sourceSheet":  "skyline$"
+    },
+    {
+        "id":  "GVR004",
+        "name":  "Grand Verdant Residences",
+        "code":  "GVR004",
+        "developer":  "St. Francis Square Realty Corporation",
+        "location":  "Bonifacio Global City, Taguig City",
+        "buildingType":  "Luxury Residential Condominium",
+        "floorsRaw":  "45",
+        "theme":  "Green Spaces with Premium Amenities",
+        "sourceSheet":  "grandverdant$"
+    },
+    {
+        "id":  "HPR004",
+        "name":  "Harbor Point Residences",
+        "code":  "HPR004",
+        "developer":  "St. Francis Square Realty Corporation",
+        "location":  "Roxas Boulevard, Pasay City",
+        "buildingType":  "High-Rise Residential Condominium",
+        "floorsRaw":  "38 Floors",
+        "theme":  "Bay-view luxury living",
+        "sourceSheet":  "\u0027harbor point$\u0027"
+    }
+]
