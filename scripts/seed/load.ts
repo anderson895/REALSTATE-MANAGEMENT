@@ -15,6 +15,7 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { resolveRoleFromSheet } from '@sfsr/domain';
+import { recomputeStats } from './recompute-stats';
 
 const DATA_DIR = join(import.meta.dirname, 'data');
 const DRY_RUN = process.argv.includes('--dry-run');
@@ -185,6 +186,7 @@ async function seedEmployees(db: Firestore): Promise<void> {
     await auth.setCustomUserClaims(uid, {
       kind: 'employee',
       employeeId: emp.id,
+      username: emp.username,
       role,
       department: emp.department,
       isSupervisor: emp.isSupervisor,
@@ -230,6 +232,12 @@ async function main(): Promise<void> {
   await seedInventory(db);
   await seedSalesOrg(db);
   await seedEmployees(db);
+
+  // Denormalise the counts the browse pages need, so a page view costs 5
+  // reads instead of 155 (Development Plan.md §12.30).
+  if (!DRY_RUN) {
+    await recomputeStats(db);
+  }
 
   console.log('\n─────────────────────────────────────────────────');
   console.log(DRY_RUN ? 'Dry run complete. Nothing was written.' : 'Seed complete.');

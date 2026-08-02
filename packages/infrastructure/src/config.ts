@@ -34,6 +34,11 @@ export const publicConfig = {
   cloudinary: {
     cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ?? '',
   },
+  recaptcha: {
+    // Public by design — the site key only identifies which widget to render.
+    // The SECRET key is what verifies a token, and it never leaves the server.
+    siteKey: process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ?? '',
+  },
 } as const;
 
 /**

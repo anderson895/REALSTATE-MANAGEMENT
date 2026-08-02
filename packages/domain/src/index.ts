@@ -19,3 +19,4 @@ export * from './events/domain-event';
 export * from './repositories';
 export * from './services';
 export * from './rbac';
+export * from './policies';

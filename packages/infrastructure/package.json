@@ -9,6 +9,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./server": "./src/server.ts",
+    "./node": "./src/node.ts",
     "./testing": "./src/testing/index.ts"
   },
   "scripts": {

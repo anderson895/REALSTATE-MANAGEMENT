@@ -1,7 +1,6 @@
-import Link from 'next/link';
 import { headers } from 'next/headers';
 import { AppShell } from '@sfsr/ui';
-import { getTier } from '@/lib/session';
+import { getClientSession } from '@/lib/session';
 import { navigationFor } from '@/lib/navigation';
 import { SessionFooter } from './session-footer';
 
@@ -10,7 +9,11 @@ import { SessionFooter } from './session-footer';
  * sees the same sidebar, just with fewer items.
  */
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
-  const tier = await getTier();
+  // One verified cookie read gives the tier AND the person's name, so the
+  // sidebar can greet them without touching Firestore.
+  const session = await getClientSession();
+  const tier = session?.tier ?? 'GUEST';
+
   const headerList = await headers();
   const currentPath = headerList.get('x-pathname') ?? '/';
 
@@ -20,8 +23,13 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       subtitle="Client Portal"
       sections={navigationFor(tier)}
       currentPath={currentPath}
-      LinkComponent={Link}
-      footer={<SessionFooter tier={tier} />}
+      footer={
+        <SessionFooter
+          tier={tier}
+          displayName={session?.displayName}
+          username={session?.username}
+        />
+      }
     >
       {children}
     </AppShell>

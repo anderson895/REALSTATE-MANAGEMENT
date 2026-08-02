@@ -1,69 +1,119 @@
+import Image from 'next/image';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Money } from '@sfsr/domain';
-import { getAdminFirestore } from '@sfsr/infrastructure/server';
-import { StatusBadge } from '@sfsr/ui';
+import { StatusBadge, cloudinaryUrl } from '@sfsr/ui';
+import { getCachedProject, getCachedUnits } from '@/lib/catalog';
+import { UnitFilters } from './unit-filters';
 
-export const dynamic = 'force-dynamic';
-
-interface UnitRow {
-  readonly id: string;
-  readonly tower: string | null;
-  readonly floor: number;
-  readonly unitNo: string;
-  readonly unitType: string;
-  readonly areaSqm: number;
-  readonly price: Money;
-  readonly status: string;
+export async function generateMetadata({ params }: { params: Promise<{ projectId: string }> }) {
+  const { projectId } = await params;
+  const project = await getCachedProject(projectId);
+  return { title: project?.name ?? 'Project' };
 }
 
 export default async function ProjectPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { projectId } = await params;
-  const db = getAdminFirestore();
+  const query = await searchParams;
 
-  const [projectSnap, unitsSnap] = await Promise.all([
-    db.collection('projects').doc(projectId).get(),
-    db.collection('units').where('projectId', '==', projectId).get(),
+  const first = (value: string | string[] | undefined): string | undefined =>
+    Array.isArray(value) ? value[0] : value;
+
+  // Filters are pushed into the Firestore query, so a narrowed view reads
+  // FEWER documents rather than fetching everything and filtering in memory.
+  // They are also part of the cache key, so each combination caches separately.
+  const filters = {
+    tower: first(query.tower),
+    unitType: first(query.type),
+    status: first(query.status),
+  };
+
+  // COST on a cache miss: 1 read for the project + one per matching unit
+  // (at most 30 here). Zero on a hit.
+  const [project, units] = await Promise.all([
+    getCachedProject(projectId),
+    getCachedUnits(projectId, filters),
   ]);
 
-  if (!projectSnap.exists) notFound();
-  const project = projectSnap.data() ?? {};
+  if (!project) notFound();
 
-  const units: UnitRow[] = unitsSnap.docs
-    .map((doc) => {
-      const d = doc.data();
-      return {
-        id: doc.id,
-        tower: d.tower ? String(d.tower) : null,
-        floor: Number(d.floor ?? 0),
-        unitNo: String(d.unitNo ?? ''),
-        unitType: String(d.unitType ?? ''),
-        areaSqm: Number(d.areaSqm ?? 0),
-        price: Money.fromCentavos(Number(d.purchasePriceCentavos ?? 0)),
-        status: String(d.status ?? 'Available'),
-      };
-    })
-    .sort((a, b) => a.id.localeCompare(b.id));
-
-  // Some projects are twin-tower (Skyline), some single. Only show the column
-  // when the data has it — two of the five source sheets have no Tower column.
+  // Two of the five source sheets have no Tower column, so only render that
+  // column where the data actually has towers (Development Plan.md §12.5).
   const hasTower = units.some((u) => u.tower !== null);
+  const filtered = Boolean(filters.tower ?? filters.unitType ?? filters.status);
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-10">
+      {project.heroImageUrl ? (
+        <div className="relative mb-8 aspect-[21/9] overflow-hidden rounded-lg bg-neutral-100 dark:bg-neutral-800">
+          <Image
+            src={cloudinaryUrl(project.heroImageUrl, { width: 1400, height: 600, crop: 'fill' })}
+            alt={project.name}
+            fill
+            sizes="(max-width: 1024px) 100vw, 1024px"
+            className="object-cover"
+            priority
+          />
+        </div>
+      ) : null}
+
       <header className="mb-8">
-        <h1 className="text-xl font-semibold">{String(project.name ?? projectId)}</h1>
-        <p className="mt-1 text-sm text-neutral-500">{String(project.location ?? '')}</p>
+        <h1 className="text-xl font-semibold">{project.name}</h1>
+        <p className="mt-1 text-sm text-neutral-500">{project.location}</p>
         <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-2 text-xs">
-          <Detail label="Project code" value={String(project.code ?? projectId)} />
-          <Detail label="Building type" value={String(project.buildingType ?? '—')} />
-          <Detail label="Floors" value={String(project.floorsRaw ?? '—')} />
-          <Detail label="Developer" value={String(project.developer ?? '—')} />
+          <Detail label="Project code" value={project.code} />
+          <Detail label="Building type" value={project.buildingType || '—'} />
+          <Detail label="Floors" value={project.floors || '—'} />
+          <Detail label="Developer" value={project.developer || '—'} />
+          <Detail
+            label="Availability"
+            value={`${project.stats.availableUnits} of ${project.stats.totalUnits} units`}
+          />
         </dl>
       </header>
+
+      {Object.keys(project.floorPlans).length > 0 ? (
+        <section className="mb-8">
+          <h2 className="mb-3 text-sm font-medium">Floor plans</h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {Object.entries(project.floorPlans).map(([unitType, url]) => (
+              <a
+                key={unitType}
+                href={cloudinaryUrl(url, { width: 1400 })}
+                target="_blank"
+                rel="noreferrer"
+                className="group overflow-hidden rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
+              >
+                <div className="relative aspect-square bg-neutral-50 dark:bg-neutral-800">
+                  <Image
+                    src={cloudinaryUrl(url, { width: 400, height: 400, crop: 'fit' })}
+                    alt={`${unitType} floor plan`}
+                    fill
+                    sizes="(max-width: 640px) 50vw, 25vw"
+                    className="object-contain p-1"
+                  />
+                </div>
+                <p className="border-t border-neutral-100 px-2 py-1.5 text-center text-xs text-neutral-600 group-hover:text-brand-700 dark:border-neutral-800 dark:text-neutral-400">
+                  {unitType}
+                </p>
+              </a>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <UnitFilters
+        projectId={project.id}
+        current={{ tower: filters.tower, type: filters.unitType, status: filters.status }}
+        towers={hasTower ? ['Tower A', 'Tower B'] : []}
+        unitTypes={project.stats.unitTypes}
+      />
 
       <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
         <table className="w-full text-sm">
@@ -81,7 +131,14 @@ export default async function ProjectPage({
           <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
             {units.map((unit) => (
               <tr key={unit.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
-                <td className="px-4 py-2.5 font-medium">{unit.unitNo}</td>
+                <td className="px-4 py-2.5 font-medium">
+                  <Link
+                    href={`/units/${unit.id}`}
+                    className="text-brand-700 hover:underline dark:text-brand-300"
+                  >
+                    {unit.unitNo}
+                  </Link>
+                </td>
                 {hasTower ? (
                   <td className="px-4 py-2.5 text-neutral-500">{unit.tower ?? '—'}</td>
                 ) : null}
@@ -91,20 +148,28 @@ export default async function ProjectPage({
                   {unit.areaSqm} sqm
                 </td>
                 <td className="tabular px-4 py-2.5 text-right font-medium">
-                  {unit.price.format()}
+                  {Money.fromCentavos(unit.purchasePriceCentavos).format()}
                 </td>
                 <td className="px-4 py-2.5">
                   <StatusBadge status={unit.status} />
                 </td>
               </tr>
             ))}
+            {units.length === 0 ? (
+              <tr>
+                <td colSpan={hasTower ? 7 : 6} className="px-4 py-8 text-center text-sm text-neutral-500">
+                  No units match these filters.
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>
 
       <p className="mt-4 text-xs text-neutral-400">
-        {units.length} units. Availability updates in real time as reservations are verified by the
-        St. Francis Square Realty team.
+        {units.length} unit{units.length === 1 ? '' : 's'}
+        {filtered ? ' matching your filters' : ''}. Availability updates as reservations are
+        verified by the St. Francis Square Realty team.
       </p>
     </div>
   );

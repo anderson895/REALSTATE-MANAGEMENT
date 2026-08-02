@@ -1,70 +1,54 @@
 import { Money, ROLE_LABELS, isInternalRole, modulesFor } from '@sfsr/domain';
-import { getAdminFirestore } from '@sfsr/infrastructure/server';
 import { StatusBadge } from '@sfsr/ui';
 import { requireEmployee } from '@/lib/session';
+import { getCachedProjects, getCachedUnitCounts } from '@/lib/catalog';
 
-export const dynamic = 'force-dynamic';
-
-interface InventorySnapshot {
-  readonly byStatus: Record<string, number>;
-  readonly totalValue: Money;
-  readonly projects: number;
-  readonly parking: number;
-}
-
-async function loadInventory(): Promise<InventorySnapshot> {
-  const db = getAdminFirestore();
-  const [units, projects, parking] = await Promise.all([
-    db.collection('units').get(),
-    db.collection('projects').count().get(),
-    db.collection('parkingSlots').count().get(),
-  ]);
-
-  const byStatus: Record<string, number> = {};
-  let totalValue = Money.zero();
-
-  for (const doc of units.docs) {
-    const data = doc.data();
-    const status = String(data.status ?? 'Available');
-    byStatus[status] = (byStatus[status] ?? 0) + 1;
-    totalValue = totalValue.add(Money.fromCentavos(Number(data.purchasePriceCentavos ?? 0)));
-  }
-
-  return {
-    byStatus,
-    totalValue,
-    projects: projects.data().count,
-    parking: parking.data().count,
-  };
-}
-
+/**
+ * COST on a cache miss: 5 reads (projects, with denormalised stats) + 3 reads
+ * (count() aggregations, which bill per 1,000 index entries rather than per
+ * document). Zero on a hit. Previously 152 on every single load.
+ *
+ * Every internal page reads the session cookie, so all of them render
+ * dynamically — caching happens around the data instead (lib/catalog.ts).
+ *
+ * See Development Plan.md §12.30.
+ */
 export default async function DashboardPage() {
   const session = await requireEmployee();
-  const inventory = await loadInventory();
+
+  const [projects, byStatus] = await Promise.all([getCachedProjects(), getCachedUnitCounts()]);
 
   if (!isInternalRole(session.role)) return null;
   const modules = modulesFor(session.role);
-  const totalUnits = Object.values(inventory.byStatus).reduce((a, b) => a + b, 0);
+
+  const totalUnits = projects.reduce((n, p) => n + p.stats.totalUnits, 0);
+  const totalParking = projects.reduce((n, p) => n + p.stats.totalParking, 0);
+  const inventoryValue = projects.reduce(
+    (sum, p) => sum.add(Money.fromCentavos(p.stats.maxPriceCentavos ?? 0)),
+    Money.zero(),
+  );
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
       <header className="mb-8">
-        <h1 className="text-xl font-semibold">Dashboard</h1>
+        <h1 className="text-xl font-semibold">
+          Welcome back, {session.displayName.split(' ')[0]}
+        </h1>
         <p className="mt-1 text-sm text-neutral-500">
-          Signed in as {session.employeeId} — {ROLE_LABELS[session.role]}
-          {session.isSupervisor ? ' (approver)' : ''}. {modules.length} module
-          {modules.length === 1 ? '' : 's'} available to this role.
+          {ROLE_LABELS[session.role]}
+          {session.isSupervisor ? ' · Approver' : ''} · {session.employeeId} · {modules.length}{' '}
+          module{modules.length === 1 ? '' : 's'} available to this role.
         </p>
       </header>
 
       <section className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Stat label="Projects" value={String(inventory.projects)} />
+        <Stat label="Projects" value={String(projects.length)} />
         <Stat label="Units" value={String(totalUnits)} />
-        <Stat label="Parking slots" value={String(inventory.parking)} />
-        <Stat label="Inventory value" value={inventory.totalValue.format()} tabular />
+        <Stat label="Parking slots" value={String(totalParking)} />
+        <Stat label="Highest unit price" value={inventoryValue.format()} tabular />
       </section>
 
-      <section className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+      <section className="mb-6 rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
         <h2 className="border-b border-neutral-200 px-5 py-3 text-sm font-medium dark:border-neutral-800">
           Unit inventory by status
         </h2>
@@ -72,15 +56,49 @@ export default async function DashboardPage() {
           {['Available', 'On Hold', 'Sold'].map((status) => (
             <li key={status} className="flex items-center justify-between px-5 py-3">
               <StatusBadge status={status} />
-              <span className="tabular text-sm font-medium">{inventory.byStatus[status] ?? 0}</span>
+              <span className="tabular text-sm font-medium">{byStatus[status] ?? 0}</span>
             </li>
           ))}
         </ul>
       </section>
 
+      <section className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+        <h2 className="border-b border-neutral-200 px-5 py-3 text-sm font-medium dark:border-neutral-800">
+          By project
+        </h2>
+        <table className="w-full text-sm">
+          <thead className="text-left text-xs text-neutral-500">
+            <tr>
+              <th className="px-5 py-2 font-medium">Project</th>
+              <th className="px-5 py-2 text-right font-medium">Available</th>
+              <th className="px-5 py-2 text-right font-medium">On Hold</th>
+              <th className="px-5 py-2 text-right font-medium">Sold</th>
+              <th className="px-5 py-2 text-right font-medium">Parking</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+            {projects.map((p) => (
+              <tr key={p.id}>
+                <td className="px-5 py-2.5">
+                  <span className="font-medium">{p.name}</span>
+                  <span className="ml-2 text-xs text-neutral-400">{p.id}</span>
+                </td>
+                <td className="tabular px-5 py-2.5 text-right">{p.stats.availableUnits}</td>
+                <td className="tabular px-5 py-2.5 text-right">{p.stats.onHoldUnits}</td>
+                <td className="tabular px-5 py-2.5 text-right">{p.stats.soldUnits}</td>
+                <td className="tabular px-5 py-2.5 text-right text-neutral-500">
+                  {p.stats.availableParking}/{p.stats.totalParking}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
       <p className="mt-6 text-xs text-neutral-400">
-        Figures read live from Firestore. Every peso figure on this page comes from the shared
-        pricing engine in @sfsr/domain — the same code the Portal uses.
+        Counts come from denormalised project stats and Firestore count() aggregations — 8 reads
+        per refresh instead of 152. Every peso figure comes from the shared pricing engine in
+        @sfsr/domain, the same code the Portal uses.
       </p>
     </div>
   );

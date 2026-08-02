@@ -17,10 +17,13 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.28.0",
+    "next-themes": "^0.4.6",
     "tailwind-merge": "^3.6.0"
   },
   "peerDependencies": {
+    "next": "^16.2.12",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
-  }
+  },
+  "comment": "Depends on next/link and next/image. Both consumers are Next.js apps, so injecting them as props bought nothing and could not cross the Server/Client Component boundary."
 }

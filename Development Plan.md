@@ -1468,6 +1468,32 @@ Findings from analysis of the source artifacts. Each must be resolved by its tar
 | 28 | **The `Department` column cannot drive permissions.** Nine employees (`EMP011`–`EMP019`) all record "Loans Management Department", but `USER ROLE ACCESS` splits them across **three roles with materially different rights** — Documentation (full CRUD on the client masterfile), Billing (SOA generation and sending), Loan Officer (view and print only). The only field that separates them is which sheet of `RBAC.xls` a person appears on. | ✅ **Resolved.** `resolveRoleFromSheet()` maps sheet → role; the seed writes the resolved role into the Firebase custom claim, not the department. Verified: 9 employees → 3 roles, 3 each. | Dev | 0 |
 | 29 | **`USER ROLE ACCESS` has one IT row, but the IT sheet has three seniority levels** — System Administrator (`EMP001`), IT Supervisor (`EMP002`), IT Staff (`EMP003`, `EMP004`). The matrix grants "Full Access to All Modules" to "IT Administrator" without distinguishing, so all four currently receive all 20 modules including delete. | Confirm whether IT Staff should hold full delete across every module. Least Privilege (§3.4) suggests a narrower `IT_STAFF` role with view + support access. Currently follows the source document literally. | **Client** | 1 |
 
+**Cost & quota**
+
+| # | Finding | Resolution | Owner | Sprint |
+|---|---|---|---|---|
+| 30 | ⚠ **The browse pages would have exhausted the Firebase free tier in minutes.** The first implementation counted available units by fetching them — **155 document reads per landing-page view** — and marked every page `force-dynamic`, disabling caching entirely. Against the Spark tier's 50,000 reads/day that is **~320 page views before the project stops serving**: less than one defense panel clicking around. | ✅ **Fixed in Sprint 1**, measured by `scripts/measure-read-cost.ts`:<br>1. **Denormalised `stats`** per project — landing page 155 → **5 reads**<br>2. **`count()` aggregations** on the internal dashboard, billed per 1,000 index entries rather than per document — 152 → **8 reads**<br>3. **`unstable_cache`** at the data layer — repeat views cost **0**<br>4. **Explicit `limit()`** on every catalogue query | Dev | 1 |
+| 31 | **A page-level `revalidate` silently did nothing.** Both shells read `cookies()` (session tier) and `headers()` (sidebar active item). Those are dynamic APIs, so every route beneath them renders on demand and `export const revalidate` never fires — the build output marks them all `ƒ`. The caching read as correct in the source and was worth exactly zero. | ✅ Caching moved into `unstable_cache` around the data functions, which applies regardless of render mode. Verified by timing: cache **miss 260–1,180 ms**, cache **hit 15 ms**. | Dev | 1 |
+
+**Measured read cost per page view**
+
+| Page | Before | After (miss) | After (hit) |
+|---|---|---|---|
+| Portal `/` | 155 | 5 | **0** |
+| Portal `/projects` | 155 | 5 | **0** |
+| Portal `/projects/[id]` | 151 | 31 | **0** |
+| Portal `/projects/[id]?type=Studio` | 151 | 9 | **0** |
+| Internal `/` | 152 | 8 | **0** |
+
+Sustained browsing now costs a **bounded ~7,200 reads/day (14% of quota)** regardless of traffic, because a burst of visitors shares one read set per cache window instead of each paying full price.
+
+**Rules this establishes**, enforced in `packages/infrastructure/src/firestore/catalog.queries.ts`:
+
+1. Never fetch a collection in order to count or aggregate it. Read denormalised stats, or use `count()`.
+2. Every query carries an explicit `limit()`. An unbounded query is a quota incident waiting for the data to grow.
+3. Cache the data, not the page — page-level caching is defeated by any dynamic API in the layout.
+4. Filters push down into the query, so a narrowed view reads *less* (30 → 8 reads for Studio-only).
+
 **Framework versions**
 
 | # | Finding | Resolution | Owner | Sprint |
@@ -1496,8 +1522,8 @@ Findings from analysis of the source artifacts. Each must be resolved by its tar
 
 | # | Finding | Resolution | Owner | Sprint |
 |---|---|---|---|---|
-| 10 | **The Legaspi Place has zero images.** The other four projects have a hero render plus floor plans. | Request assets, or use a placeholder for the defense build. | **Client** | 1 |
-| 11 | **Harbor Point has no Three Bedroom floor plan**, yet its inventory contains Three Bedroom units. No project has a **Penthouse** floor plan, yet Legaspi, Emerald, and Skyline all sell Penthouses. | Request the missing plans, or fall back to the unit-type description. | **Client** | 1 |
+| 10 | **The Legaspi Place has zero images** — no hero render, no floor plans. The other four projects have both. | Request assets. All 30 TLP001 units currently render without a plan. | **Client** | 1 |
+| 11 | **44 of 150 units (29%) have no floor plan.** Measured by `scripts/seed/upload-media.ts` after uploading all 19 available assets:<br>• `TLP001` — 30 units, no asset folder at all<br>• `HPR004 · Three Bedroom` — 8 units<br>• `Penthouse` — 11 units across `TLP001` (5), `EPR002` (5), `SQR003` (1)<br>**No project has a Penthouse plan**, yet three of them sell Penthouses at ₱33.6M–₱39.9M — the most expensive inventory is the least illustrated. | Request the missing plans. The unit page degrades to a specification panel rather than a broken image, so this is cosmetic, not blocking. | **Client** | 1 |
 | 12 | **Marketing Staff** appears in `USER ROLE ACCESS` but has **no employee sheet** — zero seedable accounts for a role that owns the Advertisement module. | Request the Marketing personnel list, or create one demo account. | **Client** | 0 |
 | 13 | Six names appear in **both** `RBAC.xls` and `SALES STAFF DATABASE.xls`: Christine Lim (Cash Supervisor `EMP008` / Group Head `GH003`), Michael Tan (`EMP007` / Broker `BR003`), Anthony Dela Cruz (`EMP023` / Broker `BR001`), Joanna Flores (`EMP011` / Broker `BR006`), Michelle Aquino (`EMP015` / Agent `AG002`), Vincent Perez (`EMP009` / Agent `AG009`). | Confirm whether these are the same people holding two roles or coincidental sample data. Affects identity modeling and conflict-of-interest rules in the approval chain. | **Client** | 0 |
 

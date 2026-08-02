@@ -75,6 +75,8 @@ export interface EmployeeSession {
   readonly kind: 'employee';
   readonly uid: string;
   readonly employeeId: string;
+  readonly displayName: string;
+  readonly username: string;
   readonly role: string;
   readonly department: string;
   readonly isSupervisor: boolean;
@@ -84,18 +86,43 @@ export interface EmployeeSession {
 export interface ClientSession {
   readonly kind: 'client';
   readonly uid: string;
+  readonly displayName: string;
+  readonly username: string;
   readonly tier: 'INITIAL' | 'PERMANENT';
 }
 
 export type Session = EmployeeSession | ClientSession;
 
+/**
+ * Reads the signed-in person's name off the token.
+ *
+ * Firebase copies a user's `displayName` into the ID token as the standard
+ * `name` claim, so this costs nothing — no Firestore read to find out who is
+ * looking at the page. Both the registration route and the employee seed set
+ * `displayName`, so it is populated for every account the system creates.
+ *
+ * Falls back to the username, then to a generic label, so the UI never renders
+ * an empty string where a name belongs.
+ */
+function nameFrom(token: DecodedIdToken, fallback: string): string {
+  const name = typeof token.name === 'string' ? token.name.trim() : '';
+  if (name.length > 0) return name;
+
+  const username = typeof token.username === 'string' ? token.username.trim() : '';
+  return username.length > 0 ? username : fallback;
+}
+
 /** Shapes a verified token into the session the apps actually use. */
 export function toSession(token: DecodedIdToken): Session | null {
+  const username = typeof token.username === 'string' ? token.username : '';
+
   if (token.kind === 'employee') {
     return {
       kind: 'employee',
       uid: token.uid,
       employeeId: String(token.employeeId ?? ''),
+      displayName: nameFrom(token, String(token.employeeId ?? 'Staff')),
+      username,
       role: String(token.role ?? ''),
       department: String(token.department ?? ''),
       isSupervisor: token.isSupervisor === true,
@@ -106,6 +133,8 @@ export function toSession(token: DecodedIdToken): Session | null {
     return {
       kind: 'client',
       uid: token.uid,
+      displayName: nameFrom(token, 'My Account'),
+      username,
       tier: token.tier === 'PERMANENT' ? 'PERMANENT' : 'INITIAL',
     };
   }

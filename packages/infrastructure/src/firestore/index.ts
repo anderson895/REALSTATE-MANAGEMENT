@@ -6,3 +6,18 @@ export {
   isFirestoreTransaction,
   type FirestoreTransactionContext,
 } from './transaction';
+
+export {
+  listProjects,
+  getProject,
+  listUnits,
+  getUnit,
+  listAvailableParking,
+  countUnitsByStatus,
+  MAX_UNITS_PER_QUERY,
+  type ProjectSummary,
+  type ProjectStats,
+  type UnitRow,
+  type UnitFilters,
+  type ParkingRow,
+} from './catalog.queries';

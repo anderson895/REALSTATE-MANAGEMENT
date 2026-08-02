@@ -13,7 +13,7 @@
 gcp-credentials*.json
 *.credentials.json
 secrets/
-
+/.claude/
 # ── Dependencies ──────────────────────────────────────────────────────────
 node_modules/
 .pnp

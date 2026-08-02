@@ -7,10 +7,23 @@
  */
 
 export { cn } from './cn';
+export { AppShell, StatusBadge, type AppShellProps } from './sidebar';
+export type { NavItem, NavSection } from './sidebar-types';
+export { MobileNav } from './mobile-nav';
+export { AuthLayout } from './auth-layout';
+export { ThemeProvider, ThemeToggle, ThemeToggleCompact, useTheme } from './theme';
+export { PageHeader, Card, EmptyState, LockedState } from './page';
 export {
-  AppShell,
-  StatusBadge,
-  type AppShellProps,
-  type NavItem,
-  type NavSection,
-} from './sidebar';
+  cloudinaryUrl,
+  MissingAsset,
+  ProjectPlaceholder,
+  type TransformOptions,
+} from './cloudinary-image';
+export {
+  TextField,
+  Checkbox,
+  SubmitButton,
+  FormError,
+  fieldClass,
+  type TextFieldProps,
+} from './form';

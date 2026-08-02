@@ -6,6 +6,17 @@
  * without duplicating it.
  */
 
+/*
+ * Dark mode is driven by a CLASS on <html>, not by the OS media query.
+ *
+ * Tailwind's default `dark:` variant follows prefers-color-scheme, which means
+ * a visitor cannot choose — they get whatever their operating system is set
+ * to. next-themes toggles `.dark` on <html>, and this rewires every `dark:`
+ * utility in both apps to follow that instead. Setting "System" in the picker
+ * still resolves to the OS preference, so nothing is lost.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   /* St. Francis Square Realty — deep green, drawn from the project renders. */
   --color-brand-50: oklch(0.97 0.02 155);
@@ -31,10 +42,75 @@
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
+    /* Native scrollbars, form controls and the date picker follow this. */
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  /*
+   * Base foreground and background.
+   *
+   * Without this, any page that does not happen to set a text colour inherits
+   * the browser default — near-black — and becomes invisible on a dark
+   * background. That is exactly what happened to the sign-in and registration
+   * pages: every heading and <label> disappeared, and only the elements with
+   * an explicit colour (links, the brand eyebrow, the button) stayed readable.
+   *
+   * Setting it here means a page cannot forget. AppShell was compensating
+   * locally, which hid the gap until a page appeared that did not use it.
+   */
+  body {
+    color: var(--color-neutral-900);
+    background-color: var(--color-white);
+  }
+
+  .dark body {
+    color: var(--color-neutral-100);
+    background-color: var(--color-neutral-950);
   }
 
   /* Peso figures must line up in tables — tabular numerals, everywhere. */
   .tabular {
     font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * Chromium paints autofilled inputs with its own near-white background and
+   * dark text, ignoring every Tailwind background class. On a dark login form
+   * that produces glaring white boxes the moment the browser fills a saved
+   * username.
+   *
+   * There is no property to disable it; the standard workaround is an inset
+   * box-shadow large enough to cover the field, plus -webkit-text-fill-color
+   * for the text. The long transition delay stops the yellow flash on focus.
+   */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: var(--color-neutral-900);
+    box-shadow: inset 0 0 20px 20px var(--color-white);
+    transition: background-color 100000s ease-in-out 0s;
+    caret-color: var(--color-neutral-900);
+  }
+
+  .dark input:-webkit-autofill,
+  .dark input:-webkit-autofill:hover,
+  .dark input:-webkit-autofill:focus,
+  .dark input:-webkit-autofill:active {
+    -webkit-text-fill-color: var(--color-neutral-100);
+    box-shadow: inset 0 0 20px 20px var(--color-neutral-800);
+    caret-color: var(--color-neutral-100);
+  }
+
+  /* Checkboxes and radios default to the OS blue, which clashes with the
+     brand green everywhere else on the page. */
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: var(--color-brand-600);
   }
 }

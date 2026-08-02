@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import { cn } from './cn';
+import { MobileNav } from './mobile-nav';
+import type { NavSection } from './sidebar-types';
 
 /**
  * Sidebar application shell, shared by both apps.
@@ -8,21 +11,31 @@ import { cn } from './cn';
  * "Gusto ko din sana ang menu(option) pag sa portal na ni buyer is nasa gilid.
  *  Mas neat kasi tignan. Para nasa isang side lang."
  * The Internal system uses the same shell so the two feel like one product.
+ *
+ * LAYOUT NOTES
+ *
+ * The aside is `sticky top-0 h-screen`, not just a flex child. Without that it
+ * scrolls away with the page: on a long project list the brand and the whole
+ * menu disappear off the top and only the footer stays in view.
+ *
+ * `h-screen` pins it to the viewport and the nav scrolls INTERNALLY, which
+ * matters for the Internal system — an IT Administrator sees 20 items across
+ * five groups, more than fits on a laptop screen.
+ *
+ * Below `md` the aside is hidden and `MobileNav` takes over with a drawer.
  */
 
-export interface NavItem {
-  readonly href: string;
-  readonly label: string;
-  readonly icon?: ReactNode;
-  /** Rendered as a count badge, e.g. pending items in a verification queue. */
-  readonly badge?: number;
-}
+export type { NavItem, NavSection } from './sidebar-types';
 
-export interface NavSection {
-  readonly title?: string;
-  readonly items: readonly NavItem[];
-}
-
+/**
+ * `next/link` is imported directly rather than injected as a prop.
+ *
+ * The injected version could not work: `AppShell` is a Server Component and
+ * `MobileNav` is a Client Component, and a function cannot cross that
+ * boundary — React rejects it with "Functions cannot be passed directly to
+ * Client Components". The abstraction was speculative anyway: both consumers
+ * are Next.js apps (§3.8, YAGNI).
+ */
 export interface AppShellProps {
   readonly brand: string;
   readonly subtitle?: string;
@@ -30,12 +43,6 @@ export interface AppShellProps {
   readonly currentPath: string;
   readonly footer?: ReactNode;
   readonly children: ReactNode;
-  /** Anchor tag component — `next/link` is injected so @sfsr/ui stays framework-agnostic. */
-  readonly LinkComponent: React.ComponentType<{
-    href: string;
-    className?: string;
-    children: ReactNode;
-  }>;
 }
 
 export function AppShell({
@@ -45,65 +52,76 @@ export function AppShell({
   currentPath,
   footer,
   children,
-  LinkComponent: Link,
 }: AppShellProps) {
   return (
-    <div className="flex min-h-screen bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-neutral-200 bg-white md:flex dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="border-b border-neutral-200 px-5 py-4 dark:border-neutral-800">
-          <p className="text-sm font-semibold text-brand-700 dark:text-brand-300">{brand}</p>
-          {subtitle ? (
-            <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">{subtitle}</p>
-          ) : null}
-        </div>
+    <div className="min-h-screen bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
+      <MobileNav
+        brand={brand}
+        subtitle={subtitle}
+        sections={sections}
+        currentPath={currentPath}
+        footer={footer}
+      />
 
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
-          {sections.map((section, i) => (
-            <div key={section.title ?? i} className={cn(i > 0 && 'mt-6')}>
-              {section.title ? (
-                <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
-                  {section.title}
-                </p>
-              ) : null}
-              <ul className="space-y-0.5">
-                {section.items.map((item) => {
-                  const active =
-                    currentPath === item.href || currentPath.startsWith(`${item.href}/`);
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        className={cn(
-                          'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors',
-                          active
-                            ? 'bg-brand-50 font-medium text-brand-800 dark:bg-brand-900/40 dark:text-brand-200'
-                            : 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800',
-                        )}
-                      >
-                        {item.icon ? <span className="shrink-0">{item.icon}</span> : null}
-                        <span className="flex-1 truncate">{item.label}</span>
-                        {item.badge ? (
-                          <span className="rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                            {item.badge}
-                          </span>
-                        ) : null}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </nav>
-
-        {footer ? (
-          <div className="border-t border-neutral-200 px-4 py-3 dark:border-neutral-800">
-            {footer}
+      <div className="flex">
+        {/* sticky + h-screen: stays pinned while only the main column scrolls */}
+        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-neutral-200 bg-white md:flex dark:border-neutral-800 dark:bg-neutral-900">
+          <div className="shrink-0 border-b border-neutral-200 px-5 py-4 dark:border-neutral-800">
+            <p className="text-sm font-semibold text-brand-700 dark:text-brand-300">{brand}</p>
+            {subtitle ? (
+              <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">{subtitle}</p>
+            ) : null}
           </div>
-        ) : null}
-      </aside>
 
-      <main className="min-w-0 flex-1">{children}</main>
+          {/* min-h-0 is required for overflow to work inside a flex column */}
+          <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+            {sections.map((section, i) => (
+              <div key={section.title ?? i} className={cn(i > 0 && 'mt-6')}>
+                {section.title ? (
+                  <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
+                    {section.title}
+                  </p>
+                ) : null}
+                <ul className="space-y-0.5">
+                  {section.items.map((item) => {
+                    const active =
+                      currentPath === item.href || currentPath.startsWith(`${item.href}/`);
+                    return (
+                      <li key={item.href}>
+                        <Link
+                          href={item.href}
+                          className={cn(
+                            'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors',
+                            active
+                              ? 'bg-brand-50 font-medium text-brand-800 dark:bg-brand-900/40 dark:text-brand-200'
+                              : 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800',
+                          )}
+                        >
+                          {item.icon ? <span className="shrink-0">{item.icon}</span> : null}
+                          <span className="flex-1 truncate">{item.label}</span>
+                          {item.badge ? (
+                            <span className="rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                              {item.badge}
+                            </span>
+                          ) : null}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </nav>
+
+          {footer ? (
+            <div className="shrink-0 border-t border-neutral-200 px-4 py-3 dark:border-neutral-800">
+              {footer}
+            </div>
+          ) : null}
+        </aside>
+
+        <main className="min-w-0 flex-1">{children}</main>
+      </div>
     </div>
   );
 }

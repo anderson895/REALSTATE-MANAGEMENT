@@ -19,7 +19,7 @@ import {
   FirestoreReservationRepository,
   FirestoreUnitOfWork,
   FirestoreUnitRepository,
-} from '@sfsr/infrastructure/server';
+} from '@sfsr/infrastructure/node';
 
 const UNIT = new UnitId('U001');
 const CLIENT = new ClientId('smoke-test-client');
