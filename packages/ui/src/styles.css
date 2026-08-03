@@ -175,6 +175,26 @@
     caret-color: var(--color-neutral-100);
   }
 
+  /*
+   * Buttons get the hand cursor back.
+   *
+   * Tailwind v3's preflight set `cursor: pointer` on buttons; v4 dropped it to
+   * follow the browser default, which is an arrow. Nothing in this codebase
+   * asked for that — it arrived with the framework — and it left all 25
+   * buttons in both apps looking like plain text to the pointer.
+   *
+   * One base rule rather than `cursor-pointer` on each: a utility repeated 25
+   * times is 25 chances to forget it on the twenty-sixth.
+   *
+   * `:not(:disabled)` matters. The hand says "this does something"; a disabled
+   * button does not, and promising otherwise is how a buyer ends up clicking
+   * Continue eight times wondering why nothing happens.
+   */
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+
   /* Checkboxes and radios default to the OS blue, which clashes with the
      brand green everywhere else on the page. */
   input[type='checkbox'],
