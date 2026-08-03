@@ -12,7 +12,7 @@ import {
   type FinancingOption,
   type PaymentTerm,
 } from '@sfsr/domain';
-import { Card, Checkbox, FormError, SubmitButton, TextField, cn, fieldClass } from '@sfsr/ui';
+import { Card, Checkbox, FormError, TextField, cn, fieldClass } from '@sfsr/ui';
 import {
   CIVIL_STATUSES,
   ID_TYPES,
@@ -665,16 +665,40 @@ export function ReservationWizard({
             <button
               type="button"
               onClick={next}
-              className="rounded-md bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700"
+              className="rounded-md bg-brand-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
             >
               Continue
             </button>
           ) : (
-            <div className="w-56">
-              <SubmitButton busy={busy} onClick={() => void submit()} type="button">
-                {busy ? 'Submitting…' : 'Submit Reservation'}
-              </SubmitButton>
-            </div>
+            /* Gold, and the only gold on the page. Seven Continues in green
+               lead here; making the eighth press look like the seventh before
+               it is how a buyer submits a ₱11M application believing they are
+               advancing another step. The sub-line states what actually
+               happens, because "Submit" alone reads as "approve me". */
+            <button
+              type="button"
+              onClick={() => void submit()}
+              disabled={busy}
+              className="flex flex-col items-center rounded-md bg-accent-500 px-6 py-2 text-white transition-colors hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide">
+                {busy ? (
+                  <svg
+                    className="h-4 w-4 animate-spin"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+                    <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                  </svg>
+                ) : null}
+                {busy ? 'Submitting…' : 'Submit Reservation Application'}
+              </span>
+              <span className="text-[10px] font-normal text-white/85">
+                Submit for verification and review.
+              </span>
+            </button>
           )}
         </div>
       </Card>
@@ -684,26 +708,86 @@ export function ReservationWizard({
 
 /* ── Presentation helpers ─────────────────────────────────────────────── */
 
+/**
+ * Numbered circles joined by a rule, as in the reference design.
+ *
+ * The connector is what the old row of pills could not express: eight
+ * equal-weight chips said "eight things", not "one sequence you are four
+ * steps into". The line fills in behind you, so progress is legible at a
+ * glance without reading a single label.
+ *
+ * `overflow-x-auto` rather than wrapping — eight steps do not fit a phone, and
+ * a stepper that reflows into two ragged rows loses the sequence it exists to
+ * show. Scrolling keeps the line intact.
+ */
 function Stepper({ current, onJump }: { current: number; onJump: (i: number) => void }) {
   return (
-    <ol className="mb-5 flex flex-wrap gap-1.5">
-      {STEPS.map((label, i) => (
-        <li key={label}>
-          <button
-            type="button"
-            onClick={() => onJump(i)}
-            disabled={i >= current}
-            className={cn(
-              'rounded-full px-2.5 py-1 text-xs transition-colors',
-              i === current && 'bg-brand-600 font-medium text-white',
-              i < current && 'bg-brand-50 text-brand-700 hover:bg-brand-100 dark:bg-brand-900/40 dark:text-brand-300',
-              i > current && 'border border-neutral-200 text-neutral-400 dark:border-neutral-700',
-            )}
-          >
-            {i + 1}. {label}
-          </button>
-        </li>
-      ))}
+    <ol className="mb-6 flex items-start overflow-x-auto pb-1">
+      {STEPS.map((label, i) => {
+        const done = i < current;
+        const active = i === current;
+
+        return (
+          <li key={label} className="flex min-w-0 flex-1 items-start">
+            <button
+              type="button"
+              onClick={() => onJump(i)}
+              disabled={!done}
+              aria-current={active ? 'step' : undefined}
+              className="flex w-16 shrink-0 flex-col items-center gap-1.5 px-0.5 sm:w-auto sm:min-w-[4.5rem]"
+            >
+              <span
+                className={cn(
+                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors',
+                  active && 'bg-brand-600 text-white ring-4 ring-brand-100 dark:ring-brand-900/60',
+                  done && 'bg-brand-500 text-white',
+                  !active &&
+                    !done &&
+                    'border border-neutral-300 bg-white text-neutral-400 dark:border-neutral-700 dark:bg-neutral-900',
+                )}
+              >
+                {done ? (
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m5 13 4 4L19 7" />
+                  </svg>
+                ) : (
+                  i + 1
+                )}
+              </span>
+              <span
+                className={cn(
+                  'text-center text-[10px] leading-tight',
+                  active && 'font-semibold text-brand-700 dark:text-brand-300',
+                  done && 'text-neutral-600 dark:text-neutral-400',
+                  !active && !done && 'text-neutral-400',
+                )}
+              >
+                {label}
+              </span>
+            </button>
+
+            {i < STEPS.length - 1 ? (
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'mt-4 h-px min-w-3 flex-1',
+                  done ? 'bg-brand-500' : 'bg-neutral-200 dark:bg-neutral-700',
+                )}
+              />
+            ) : null}
+          </li>
+        );
+      })}
     </ol>
   );
 }
@@ -711,8 +795,12 @@ function Stepper({ current, onJump }: { current: number; onJump: (i: number) => 
 function StepPanel({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return (
     <div>
-      <h2 className="text-sm font-semibold">{title}</h2>
-      {note ? <p className="mt-1 text-xs text-neutral-500">{note}</p> : null}
+      <div className="border-b border-neutral-200 pb-3 dark:border-neutral-800">
+        <h2 className="text-[13px] font-bold uppercase tracking-wide text-brand-700 dark:text-brand-300">
+          {title}
+        </h2>
+        {note ? <p className="mt-1 text-xs text-neutral-500">{note}</p> : null}
+      </div>
       <div className="mt-5">{children}</div>
     </div>
   );
@@ -743,8 +831,8 @@ function PaymentSummary({
   tier: number; term: PaymentTerm; financing: FinancingOption;
 }) {
   return (
-    <div className="mt-6 rounded-md border border-neutral-200 dark:border-neutral-800">
-      <p className="border-b border-neutral-200 px-4 py-2.5 text-sm font-medium dark:border-neutral-800">
+    <div className="mt-6 overflow-hidden rounded-md border border-neutral-200 dark:border-neutral-800">
+      <p className="border-b border-neutral-200 bg-brand-50 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wide text-brand-700 dark:border-neutral-800 dark:bg-brand-900/40 dark:text-brand-300">
         Payment Summary
       </p>
       <dl className="divide-y divide-neutral-100 px-4 text-sm dark:divide-neutral-800">

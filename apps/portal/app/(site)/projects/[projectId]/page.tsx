@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Money } from '@sfsr/domain';
 import { StatusBadge, cloudinaryUrl } from '@sfsr/ui';
-import { getCachedProject, getCachedUnits } from '@/lib/catalog';
+import { filterUnits, getCachedProject, getCachedUnits } from '@/lib/catalog';
 import { UnitFilters } from './unit-filters';
 
 export async function generateMetadata({ params }: { params: Promise<{ projectId: string }> }) {
@@ -25,27 +25,29 @@ export default async function ProjectPage({
   const first = (value: string | string[] | undefined): string | undefined =>
     Array.isArray(value) ? value[0] : value;
 
-  // Filters are pushed into the Firestore query, so a narrowed view reads
-  // FEWER documents rather than fetching everything and filtering in memory.
-  // They are also part of the cache key, so each combination caches separately.
   const filters = {
     tower: first(query.tower),
     unitType: first(query.type),
     status: first(query.status),
   };
 
-  // COST on a cache miss: 1 read for the project + one per matching unit
-  // (at most 30 here). Zero on a hit.
-  const [project, units] = await Promise.all([
+  // COST on a cache miss: 1 read for the project + one per unit in it (at most
+  // 30). Zero on a hit — and every filter combination hits the SAME entry,
+  // because the whole project is cached once and narrowed in memory below.
+  const [project, allUnits] = await Promise.all([
     getCachedProject(projectId),
-    getCachedUnits(projectId, filters),
+    getCachedUnits(projectId),
   ]);
 
   if (!project) notFound();
 
-  // Two of the five source sheets have no Tower column, so only render that
-  // column where the data actually has towers (Development Plan.md §12.5).
-  const hasTower = units.some((u) => u.tower !== null);
+  const units = filterUnits(allUnits, filters);
+
+  // Read from the UNFILTERED set: whether this project has towers is a fact
+  // about the project, not about the current filter. Deriving it from the
+  // filtered rows made the Tower column vanish the moment someone filtered to
+  // a type that happens to sit in one tower.
+  const hasTower = allUnits.some((u) => u.tower !== null);
   const filtered = Boolean(filters.tower ?? filters.unitType ?? filters.status);
 
   return (

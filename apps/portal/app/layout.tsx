@@ -18,7 +18,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // design on this element only.
     <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased">
-        <ThemeProvider>{children}</ThemeProvider>
+        {/* Light only — the approved buyer-facing design is a light one, and
+            following the visitor's OS was repainting it near-black for anyone
+            on dark Windows. The Internal system keeps the full picker. */}
+        <ThemeProvider forced="light">{children}</ThemeProvider>
       </body>
     </html>
   );

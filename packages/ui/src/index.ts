@@ -9,6 +9,7 @@
 export { cn } from './cn';
 export { AppShell, StatusBadge, type AppShellProps } from './sidebar';
 export type { NavItem, NavSection } from './sidebar-types';
+export { SHELL_STYLES, type ShellVariant, type ShellStyles } from './shell-theme';
 export { MobileNav } from './mobile-nav';
 export { AuthLayout } from './auth-layout';
 export { ThemeProvider, ThemeToggle, ThemeToggleCompact, useTheme } from './theme';

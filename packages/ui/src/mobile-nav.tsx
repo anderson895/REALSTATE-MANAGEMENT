@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { cn } from './cn';
 import { ThemeToggleCompact } from './theme';
+import { SHELL_STYLES, type ShellVariant } from './shell-theme';
 import type { NavSection } from './sidebar-types';
 
 /**
@@ -22,14 +23,19 @@ export function MobileNav({
   sections,
   currentPath,
   footer,
+  variant = 'light',
+  logo,
 }: {
   brand: string;
   subtitle?: string;
   sections: readonly NavSection[];
   currentPath: string;
   footer?: ReactNode;
+  variant?: ShellVariant;
+  logo?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const s = SHELL_STYLES[variant];
 
   // Close on navigation — otherwise the drawer stays open over the new page
   // when the user goes back or forward.
@@ -56,6 +62,9 @@ export function MobileNav({
 
   return (
     <>
+      {/* The bar itself stays neutral in both skins. A green header plus a
+          green drawer behind it left the hamburger sitting on the same colour
+          it opens, with nothing to say it was a control. */}
       <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur md:hidden dark:border-neutral-800 dark:bg-neutral-900/95">
         <button
           type="button"
@@ -97,17 +106,18 @@ export function MobileNav({
             onClick={() => setOpen(false)}
             className="absolute inset-0 bg-black/40"
           />
-          <div className="absolute inset-y-0 left-0 flex w-72 flex-col border-r border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-            <div className="flex shrink-0 items-start justify-between border-b border-neutral-200 px-5 py-4 dark:border-neutral-800">
-              <div>
-                <p className="text-sm font-semibold text-brand-700 dark:text-brand-300">{brand}</p>
-                {subtitle ? <p className="mt-0.5 text-xs text-neutral-500">{subtitle}</p> : null}
+          <div className={cn('absolute inset-y-0 left-0 flex w-72 flex-col border-r', s.surface)}>
+            <div className={cn('flex shrink-0 items-center gap-2.5 px-5 py-4', s.brandBlock)}>
+              {logo}
+              <div className="min-w-0 flex-1">
+                <p className={s.brandText}>{brand}</p>
+                {subtitle ? <p className={cn('mt-0.5', s.subtitleText)}>{subtitle}</p> : null}
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="Close navigation"
-                className="rounded-md p-1 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                className={cn('shrink-0 rounded-md p-1', s.closeButton)}
               >
                 <svg
                   width="18"
@@ -128,9 +138,7 @@ export function MobileNav({
               {sections.map((section, i) => (
                 <div key={section.title ?? i} className={cn(i > 0 && 'mt-6')}>
                   {section.title ? (
-                    <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
-                      {section.title}
-                    </p>
+                    <p className={cn('px-2 pb-2', s.sectionTitle)}>{section.title}</p>
                   ) : null}
                   <ul className="space-y-0.5">
                     {section.items.map((item) => {
@@ -141,13 +149,13 @@ export function MobileNav({
                           <Link
                             href={item.href}
                             onClick={() => setOpen(false)}
+                            aria-current={active ? 'page' : undefined}
                             className={cn(
                               'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm',
-                              active
-                                ? 'bg-brand-50 font-medium text-brand-800 dark:bg-brand-900/40 dark:text-brand-200'
-                                : 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800',
+                              active ? s.itemActive : s.item,
                             )}
                           >
+                            {item.icon ? <span className="shrink-0">{item.icon}</span> : null}
                             <span className="flex-1 truncate">{item.label}</span>
                           </Link>
                         </li>
@@ -158,11 +166,7 @@ export function MobileNav({
               ))}
             </nav>
 
-            {footer ? (
-              <div className="shrink-0 border-t border-neutral-200 px-4 py-3 dark:border-neutral-800">
-                {footer}
-              </div>
-            ) : null}
+            {footer ? <div className={cn('shrink-0 px-4 py-3', s.footer)}>{footer}</div> : null}
           </div>
         </div>
       ) : null}

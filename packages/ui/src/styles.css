@@ -18,17 +18,56 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  /* St. Francis Square Realty — deep green, drawn from the project renders. */
-  --color-brand-50: oklch(0.97 0.02 155);
-  --color-brand-100: oklch(0.94 0.04 155);
-  --color-brand-200: oklch(0.88 0.07 155);
-  --color-brand-300: oklch(0.79 0.11 155);
-  --color-brand-400: oklch(0.68 0.14 155);
-  --color-brand-500: oklch(0.58 0.14 155);
-  --color-brand-600: oklch(0.48 0.12 155);
-  --color-brand-700: oklch(0.39 0.10 155);
-  --color-brand-800: oklch(0.31 0.08 155);
-  --color-brand-900: oklch(0.24 0.06 155);
+  /*
+   * St. Francis Square Realty — deep green.
+   *
+   * Written as hex, not oklch, because these are MATCHED values rather than
+   * generated ones: 600, 500, 800 and 50 are lifted verbatim from the approved
+   * palette (brand #234b31, brand-soft #33623f, brand-deep #17331f, brand-tint
+   * #eef4ef). An oklch ramp would land near them but never on them, and "near
+   * the brand colour" is not a thing a brand colour is allowed to be. The
+   * in-between stops are interpolated to keep the ramp smooth.
+   *
+   * 600 is the anchor because that is what `bg-brand-600` resolves to across
+   * both apps — buttons, avatars, the sidebar. Hover goes to 700, which is
+   * darker, following the Tailwind convention the components already assume.
+   */
+  --color-brand-50: #eef4ef;
+  --color-brand-100: #d7e6dc;
+  --color-brand-200: #b0cdb9;
+  --color-brand-300: #82ac90;
+  --color-brand-400: #558a68;
+  --color-brand-500: #33623f;
+  --color-brand-600: #234b31;
+  --color-brand-700: #1c3d28;
+  --color-brand-800: #17331f;
+  --color-brand-900: #0f2215;
+
+  /*
+   * Gold — the one warm accent.
+   *
+   * Reserved for the single most important action on a screen (the reservation
+   * submit) and for marking the active item in the green sidebar. Spending it
+   * anywhere else is what turns an accent into decoration.
+   *
+   * Hover goes LIGHTER (400 from 500), the opposite of the brand ramp: gold on
+   * green is already dark, and darkening it on hover reads as the button going
+   * dead rather than responding.
+   */
+  --color-accent-50: #fdf6e9;
+  --color-accent-100: #f8e8c4;
+  --color-accent-200: #efd08c;
+  --color-accent-300: #e2b45b;
+  --color-accent-400: #d99a35;
+  --color-accent-500: #c0801f;
+  --color-accent-600: #a26a19;
+  --color-accent-700: #815314;
+  --color-accent-800: #63400f;
+  --color-accent-900: #4a300b;
+
+  /* Page background behind the cards. Slightly cooler than neutral-50, which
+     is what stops a white card from disappearing into the page. */
+  --color-canvas: #f7f8fa;
 
   /* Unit lifecycle colours, used by both apps so a status never looks
      different depending on which system you are in (§3.1). */
@@ -36,7 +75,23 @@
   --color-status-hold: oklch(0.75 0.15 75);
   --color-status-sold: oklch(0.58 0.18 25);
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans: 'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/**
+ * Hides the scrollbar without disabling scrolling.
+ *
+ * `@utility` registers this like any built-in, so it composes with variants
+ * (`md:scrollbar-none`) instead of being a class that only works by accident.
+ * Used by the featured-projects strip, where the arrows and native swipe are
+ * the affordances and a scrollbar under the cards is just noise.
+ */
+@utility scrollbar-none {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @layer base {

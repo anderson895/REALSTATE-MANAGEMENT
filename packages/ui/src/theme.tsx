@@ -35,13 +35,26 @@ function useMounted(): boolean {
  *
  * `defaultTheme="system"` keeps the previous behaviour for anyone who never
  * touches the picker: the OS preference still wins by default.
+ *
+ * `forced` pins one theme and takes the choice away entirely. The buyer portal
+ * uses it: the approved design is a light one, and on a visitor whose Windows
+ * is set to dark — which is most of them — "system" was silently repainting the
+ * whole brochure in near-black. A sales surface does not get to look different
+ * depending on the buyer's OS setting.
  */
-export function ThemeProvider({ children }: { children: ReactNode }) {
+export function ThemeProvider({
+  children,
+  forced,
+}: {
+  children: ReactNode;
+  forced?: 'light' | 'dark';
+}) {
   return (
     <NextThemeProvider
       attribute="class"
-      defaultTheme="system"
-      enableSystem
+      defaultTheme={forced ?? 'system'}
+      enableSystem={!forced}
+      forcedTheme={forced}
       // Transitions on a colour change look like a smear across the whole
       // page; suppressing them for the swap keeps it instant.
       disableTransitionOnChange
@@ -66,8 +79,14 @@ const OPTIONS = [
  * have picked one.
  */
 export function ThemeToggle({ className }: { className?: string }) {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, forcedTheme } = useTheme();
   const mounted = useMounted();
+
+  // A picker that cannot change anything is worse than no picker: it invites
+  // the click and then ignores it. Reading `forcedTheme` here means the apps
+  // that pin a theme get this for free, with no prop threaded down through the
+  // shell and the mobile drawer to switch it off.
+  if (forcedTheme) return null;
 
   if (!mounted) {
     return (
@@ -117,8 +136,10 @@ export function ThemeToggle({ className }: { className?: string }) {
 
 /** Compact icon-only variant, for headers where a segmented control is too wide. */
 export function ThemeToggleCompact({ className }: { className?: string }) {
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme, forcedTheme } = useTheme();
   const mounted = useMounted();
+
+  if (forcedTheme) return null;
 
   if (!mounted) {
     return <div className={cn('h-8 w-8 rounded-md', className)} aria-hidden="true" />;

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { cn } from './cn';
 import { MobileNav } from './mobile-nav';
+import { SHELL_STYLES, type ShellVariant } from './shell-theme';
 import type { NavSection } from './sidebar-types';
 
 /**
@@ -26,6 +27,7 @@ import type { NavSection } from './sidebar-types';
  */
 
 export type { NavItem, NavSection } from './sidebar-types';
+export type { ShellVariant } from './shell-theme';
 
 /**
  * `next/link` is imported directly rather than injected as a prop.
@@ -43,6 +45,24 @@ export interface AppShellProps {
   readonly currentPath: string;
   readonly footer?: ReactNode;
   readonly children: ReactNode;
+  /**
+   * Which skin to wear. Defaults to `light`, so the Internal system keeps the
+   * neutral sidebar it already had without changing its call.
+   */
+  readonly variant?: ShellVariant;
+  /**
+   * Company mark, shown beside the name on the brand plate.
+   *
+   * A node rather than a `src` string: the Portal passes a `next/image` so the
+   * logo is optimised and sized at build time, and nothing about that belongs
+   * in a shared package that does not know where the file lives.
+   */
+  readonly logo?: ReactNode;
+  /**
+   * Sticky bar across the top of the CONTENT column — who is signed in,
+   * notifications. Distinct from `footer`, which sits inside the sidebar.
+   */
+  readonly topbar?: ReactNode;
 }
 
 export function AppShell({
@@ -52,25 +72,35 @@ export function AppShell({
   currentPath,
   footer,
   children,
+  variant = 'light',
+  logo,
+  topbar,
 }: AppShellProps) {
+  const s = SHELL_STYLES[variant];
+
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
+    <div className="min-h-screen bg-canvas text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
       <MobileNav
         brand={brand}
         subtitle={subtitle}
         sections={sections}
         currentPath={currentPath}
         footer={footer}
+        variant={variant}
+        logo={logo}
       />
 
       <div className="flex">
         {/* sticky + h-screen: stays pinned while only the main column scrolls */}
-        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-neutral-200 bg-white md:flex dark:border-neutral-800 dark:bg-neutral-900">
-          <div className="shrink-0 border-b border-neutral-200 px-5 py-4 dark:border-neutral-800">
-            <p className="text-sm font-semibold text-brand-700 dark:text-brand-300">{brand}</p>
-            {subtitle ? (
-              <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">{subtitle}</p>
-            ) : null}
+        <aside
+          className={cn('sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r md:flex', s.surface)}
+        >
+          <div className={cn('flex shrink-0 items-center gap-2.5 px-5 py-4', s.brandBlock)}>
+            {logo}
+            <div className="min-w-0">
+              <p className={s.brandText}>{brand}</p>
+              {subtitle ? <p className={cn('mt-0.5', s.subtitleText)}>{subtitle}</p> : null}
+            </div>
           </div>
 
           {/* min-h-0 is required for overflow to work inside a flex column */}
@@ -78,9 +108,7 @@ export function AppShell({
             {sections.map((section, i) => (
               <div key={section.title ?? i} className={cn(i > 0 && 'mt-6')}>
                 {section.title ? (
-                  <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
-                    {section.title}
-                  </p>
+                  <p className={cn('px-2 pb-2', s.sectionTitle)}>{section.title}</p>
                 ) : null}
                 <ul className="space-y-0.5">
                   {section.items.map((item) => {
@@ -90,17 +118,21 @@ export function AppShell({
                       <li key={item.href}>
                         <Link
                           href={item.href}
+                          aria-current={active ? 'page' : undefined}
                           className={cn(
                             'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors',
-                            active
-                              ? 'bg-brand-50 font-medium text-brand-800 dark:bg-brand-900/40 dark:text-brand-200'
-                              : 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800',
+                            active ? s.itemActive : s.item,
                           )}
                         >
                           {item.icon ? <span className="shrink-0">{item.icon}</span> : null}
                           <span className="flex-1 truncate">{item.label}</span>
                           {item.badge ? (
-                            <span className="rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                            <span
+                              className={cn(
+                                'rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
+                                s.badge,
+                              )}
+                            >
                               {item.badge}
                             </span>
                           ) : null}
@@ -113,14 +145,27 @@ export function AppShell({
             ))}
           </nav>
 
-          {footer ? (
-            <div className="shrink-0 border-t border-neutral-200 px-4 py-3 dark:border-neutral-800">
-              {footer}
-            </div>
-          ) : null}
+          {footer ? <div className={cn('shrink-0 px-4 py-3', s.footer)}>{footer}</div> : null}
         </aside>
 
-        <main className="min-w-0 flex-1">{children}</main>
+        <main className="min-w-0 flex-1">
+          {/*
+           * Sticky on desktop so the account chip is reachable without
+           * scrolling back up — the reservation wizard is several viewports
+           * tall.
+           *
+           * Deliberately NOT sticky below `md`: `MobileNav` already pins its
+           * own header at top-0, and a second sticky element at the same
+           * offset does not stack, it overlaps. On a phone this bar simply
+           * scrolls away and the drawer carries the navigation.
+           */}
+          {topbar ? (
+            <div className="relative z-20 border-b border-neutral-200 bg-white/95 backdrop-blur md:sticky md:top-0 dark:border-neutral-800 dark:bg-neutral-900/95">
+              {topbar}
+            </div>
+          ) : null}
+          {children}
+        </main>
       </div>
     </div>
   );
