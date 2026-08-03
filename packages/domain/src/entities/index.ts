@@ -16,3 +16,5 @@ export {
   type ReservationProps,
   type ReservationTerms,
 } from './reservation';
+
+export { canRequestWithdrawal, MAX_WITHDRAWAL_REASON } from './withdrawal';

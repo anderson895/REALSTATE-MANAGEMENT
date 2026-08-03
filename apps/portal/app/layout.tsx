@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from '@sfsr/ui';
 import './globals.css';
@@ -12,12 +13,17 @@ export const metadata: Metadata = {
     'Browse condominium units, schedule a site viewing, and reserve your property online.',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Read here rather than in the sidebar so the class is on <html> in the very
+  // first byte of markup. Resolve it after paint and the sidebar would render
+  // wide and then snap shut in front of the visitor.
+  const collapsed = (await cookies()).get('sfsr-sidebar')?.value === 'collapsed';
+
   return (
     // suppressHydrationWarning is required: next-themes sets class="dark" on
     // <html> before React hydrates, so the server and client markup differ by
     // design on this element only.
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={collapsed ? 'sidebar-collapsed' : undefined} suppressHydrationWarning>
       <body className="font-sans antialiased">
         {/* Light only — the approved buyer-facing design is a light one, and
             following the visitor's OS was repainting it near-black for anyone

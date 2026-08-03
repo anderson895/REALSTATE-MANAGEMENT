@@ -2,8 +2,10 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Money } from '@sfsr/domain';
+import type { UnitRow } from '@sfsr/infrastructure/server';
 import { StatusBadge, cloudinaryUrl } from '@sfsr/ui';
 import { filterUnits, getCachedProject, getCachedUnits } from '@/lib/catalog';
+import { formatRange } from '@/lib/format';
 import { UnitFilters } from './unit-filters';
 
 export async function generateMetadata({ params }: { params: Promise<{ projectId: string }> }) {
@@ -117,21 +119,135 @@ export default async function ProjectPage({
         unitTypes={project.stats.unitTypes}
       />
 
-      <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-        <table className="w-full text-sm">
-          <thead className="border-b border-neutral-200 text-left text-xs text-neutral-500 dark:border-neutral-800">
+      {units.length === 0 ? (
+        <div className="rounded-lg border border-neutral-200 bg-white px-4 py-8 text-center text-sm text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900">
+          No units match these filters.
+        </div>
+      ) : (
+        <div className="divide-y divide-neutral-200 overflow-hidden rounded-lg border border-neutral-200 bg-white dark:divide-neutral-800 dark:border-neutral-800 dark:bg-neutral-900">
+          {groupByFloor(units).map(([floor, rows], index) => (
+            <FloorGroup
+              key={floor}
+              floor={floor}
+              rows={rows}
+              hasTower={hasTower}
+              // The first floor always opens, so the page never lands as a
+              // stack of shut drawers with nothing to read. Everything opens
+              // when the set is already small — once a filter has cut it to a
+              // handful, hiding them again is work for no gain.
+              open={index === 0 || units.length <= 8}
+            />
+          ))}
+        </div>
+      )}
+
+      <p className="mt-4 text-xs text-neutral-400">
+        {units.length} unit{units.length === 1 ? '' : 's'}
+        {filtered ? ' matching your filters' : ''}. Availability updates as reservations are
+        verified by the St. Francis Square Realty team.
+      </p>
+    </div>
+  );
+}
+
+/** Units bucketed by floor, low to high. */
+function groupByFloor(units: readonly UnitRow[]): [number, UnitRow[]][] {
+  const byFloor = new Map<number, UnitRow[]>();
+  for (const unit of units) {
+    const rows = byFloor.get(unit.floor);
+    if (rows) rows.push(unit);
+    else byFloor.set(unit.floor, [unit]);
+  }
+  return [...byFloor.entries()].sort(([a], [b]) => a - b);
+}
+
+/**
+ * One collapsible floor.
+ *
+ * Native `<details>`, not a click handler: the browser already knows how to
+ * open and close one, announce it to a screen reader, and drive it from the
+ * keyboard. Reaching for state here would mean marking the whole page
+ * `'use client'` and shipping JavaScript to reimplement a browser feature.
+ *
+ * The summary carries the count and the price range, so the choice to open a
+ * floor can be made without opening it — which is the entire point of
+ * collapsing them.
+ *
+ * Each floor gets its OWN table, complete with its own header. That is not a
+ * compromise forced by `<details>` (which cannot wrap a `<tbody>`): opening
+ * floor 6 puts the column labels right there, rather than back up the page
+ * past five collapsed sections. `table-fixed` with matching widths keeps the
+ * columns aligned from one floor to the next.
+ */
+function FloorGroup({
+  floor,
+  rows,
+  hasTower,
+  open,
+}: {
+  floor: number;
+  rows: readonly UnitRow[];
+  hasTower: boolean;
+  open: boolean;
+}) {
+  const prices = rows.map((r) => r.purchasePriceCentavos);
+  const types = [...new Set(rows.map((r) => r.unitType))];
+  const available = rows.filter((r) => r.status === 'Available').length;
+
+  return (
+    <details open={open} className="group">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 transition-colors hover:bg-neutral-50 [&::-webkit-details-marker]:hidden dark:hover:bg-neutral-800/50">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          className="shrink-0 text-neutral-400 transition-transform group-open:rotate-90"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+
+        <span className="text-sm font-semibold">Floor {floor}</span>
+
+        <span className="text-xs text-neutral-500">
+          {rows.length} {rows.length === 1 ? 'unit' : 'units'}
+          {available < rows.length ? ` · ${available} available` : ''}
+        </span>
+
+        <span className="hidden truncate text-xs text-neutral-500 sm:inline">
+          {types.join(', ')}
+        </span>
+
+        <span className="tabular ml-auto shrink-0 text-xs font-semibold text-brand-700 dark:text-brand-300">
+          {formatRange(Math.min(...prices), Math.max(...prices))}
+        </span>
+      </summary>
+
+      <div className="overflow-x-auto border-t border-neutral-100 dark:border-neutral-800">
+        <table className="w-full table-fixed text-sm">
+          <thead className="text-left text-xs text-neutral-500">
             <tr>
-              <th className="px-4 py-2.5 font-medium">Unit</th>
-              {hasTower ? <th className="px-4 py-2.5 font-medium">Tower</th> : null}
-              <th className="px-4 py-2.5 font-medium">Floor</th>
-              <th className="px-4 py-2.5 font-medium">Type</th>
-              <th className="px-4 py-2.5 text-right font-medium">Area</th>
-              <th className="px-4 py-2.5 text-right font-medium">Price</th>
-              <th className="px-4 py-2.5 font-medium">Status</th>
+              <th className={`px-4 py-2 font-medium ${hasTower ? 'w-[14%]' : 'w-[16%]'}`}>Unit</th>
+              {hasTower ? <th className="w-[12%] px-4 py-2 font-medium">Tower</th> : null}
+              <th className={`px-4 py-2 font-medium ${hasTower ? 'w-[18%]' : 'w-[22%]'}`}>Type</th>
+              <th className={`px-4 py-2 text-right font-medium ${hasTower ? 'w-[12%]' : 'w-[14%]'}`}>
+                Area
+              </th>
+              <th className={`px-4 py-2 text-right font-medium ${hasTower ? 'w-[18%]' : 'w-[20%]'}`}>
+                Price
+              </th>
+              <th className={`px-4 py-2 text-right font-medium ${hasTower ? 'w-[26%]' : 'w-[28%]'}`}>
+                Status
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-            {units.map((unit) => (
+            {rows.map((unit) => (
               <tr key={unit.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
                 <td className="px-4 py-2.5 font-medium">
                   <Link
@@ -144,36 +260,49 @@ export default async function ProjectPage({
                 {hasTower ? (
                   <td className="px-4 py-2.5 text-neutral-500">{unit.tower ?? '—'}</td>
                 ) : null}
-                <td className="tabular px-4 py-2.5 text-neutral-500">{unit.floor}</td>
-                <td className="px-4 py-2.5">{unit.unitType}</td>
+                <td className="truncate px-4 py-2.5">{unit.unitType}</td>
                 <td className="tabular px-4 py-2.5 text-right text-neutral-500">
                   {unit.areaSqm} sqm
                 </td>
                 <td className="tabular px-4 py-2.5 text-right font-medium">
                   {Money.fromCentavos(unit.purchasePriceCentavos).format()}
                 </td>
-                <td className="px-4 py-2.5">
-                  <StatusBadge status={unit.status} />
+                {/*
+                 * Status AND the way forward, in one right-aligned cell.
+                 *
+                 * The unit number has always been a link to this unit's page,
+                 * where the Reserve button lives — but as green text in a
+                 * table it read as a label, not a door. A buyer asked outright
+                 * where they were meant to reserve, which is the whole answer
+                 * about how visible it was.
+                 *
+                 * It still routes to the unit page rather than straight to the
+                 * wizard: floor plan, area and the full price breakdown are
+                 * there, and nobody should start an ₱11M application without
+                 * passing them. The label says both halves so it is not a
+                 * promise of a shortcut that does not exist.
+                 */}
+                <td className="px-4 py-2.5 text-right">
+                  <span className="mr-3 align-middle">
+                    <StatusBadge status={unit.status} />
+                  </span>
+                  <Link
+                    href={`/units/${unit.id}`}
+                    className={
+                      unit.status === 'Available'
+                        ? 'whitespace-nowrap text-xs font-semibold text-brand-600 hover:text-accent-500'
+                        : 'whitespace-nowrap text-xs text-neutral-500 hover:text-neutral-700'
+                    }
+                  >
+                    {unit.status === 'Available' ? 'View & Reserve →' : 'View →'}
+                  </Link>
                 </td>
               </tr>
             ))}
-            {units.length === 0 ? (
-              <tr>
-                <td colSpan={hasTower ? 7 : 6} className="px-4 py-8 text-center text-sm text-neutral-500">
-                  No units match these filters.
-                </td>
-              </tr>
-            ) : null}
           </tbody>
         </table>
       </div>
-
-      <p className="mt-4 text-xs text-neutral-400">
-        {units.length} unit{units.length === 1 ? '' : 's'}
-        {filtered ? ' matching your filters' : ''}. Availability updates as reservations are
-        verified by the St. Francis Square Realty team.
-      </p>
-    </div>
+    </details>
   );
 }
 

@@ -20,3 +20,4 @@ export * from './repositories';
 export * from './services';
 export * from './rbac';
 export * from './policies';
+export * from './documents';

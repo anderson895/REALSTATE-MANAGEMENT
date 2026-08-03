@@ -54,7 +54,13 @@ export const SHELL_STYLES: Record<ShellVariant, ShellStyles> = {
     // Stays green in dark mode rather than flipping to neutral: the sidebar IS
     // the brand surface, and a company colour that disappears at night is not
     // one. It only deepens.
-    surface: 'border-brand-800 bg-brand-600 dark:border-black/40 dark:bg-brand-900',
+    //
+    // Border colour MATCHES the background so the shared `border-r` on the
+    // aside disappears. It was #17331f against #234b31 — near-black, and it
+    // read as a hard line down the edge of the panel. Recolouring it beats
+    // trying to cancel `border-r` from here: both would be single-class
+    // selectors, so which one won would come down to stylesheet order.
+    surface: 'border-brand-600 bg-brand-600 dark:border-brand-900 dark:bg-brand-900',
     // White plate, as in the reference. The crest is a dark-green mark, so it
     // needs a light ground — on the green body it would vanish.
     brandBlock: 'bg-white dark:bg-neutral-900',

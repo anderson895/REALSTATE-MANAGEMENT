@@ -11,6 +11,7 @@ import {
   PricingService,
   type DownPaymentTier,
   type FinancingOption,
+  type IdType,
   type PaymentTerm,
 } from '@sfsr/domain';
 import { Card, Checkbox, FormError, TextField, cn, fieldClass } from '@sfsr/ui';
@@ -21,6 +22,7 @@ import {
   reservationSchema,
 } from '@/lib/schemas/reservation';
 import { FileUpload, type UploadedFile } from './file-upload';
+import { useIdCheck } from './use-id-check';
 
 /**
  * The eight-step reservation application from RESERVATION.doc.
@@ -107,7 +109,15 @@ export function ReservationWizard({
   const [receipt, setReceipt] = useState<UploadedFile | null>(null);
 
   const [idType, setIdType] = useState<(typeof ID_TYPES)[number] | ''>('');
-  const [idFile, setIdFile] = useState<UploadedFile | null>(null);
+  const [idFrontFile, setIdFrontFile] = useState<UploadedFile | null>(null);
+  const [idBackFile, setIdBackFile] = useState<UploadedFile | null>(null);
+
+  // The RAW files, kept only in memory for the OCR check. Cloudinary stores
+  // these as `authenticated` assets, so once uploaded they cannot be read back
+  // to scan — it happens here or not at all.
+  const [idFrontRaw, setIdFrontRaw] = useState<File | null>(null);
+  const [idBackRaw, setIdBackRaw] = useState<File | null>(null);
+  const idCheck = useIdCheck();
 
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [declarations, setDeclarations] = useState({
@@ -207,7 +217,11 @@ export function ReservationWizard({
         amountCentavos: reservationFeeCentavos,
         receipt: receipt ?? undefined,
       },
-      governmentId: { idType, file: idFile ?? undefined },
+      governmentId: {
+        idType,
+        frontFile: idFrontFile ?? undefined,
+        backFile: idBackFile ?? undefined,
+      },
       acceptedTerms,
       declaredTruthful: declarations.truthful,
       declaredReviewed: declarations.reviewed,
@@ -251,7 +265,11 @@ export function ReservationWizard({
     ['downPaymentTier', 'paymentTerm', 'financingOption'],
     [],
     ['payment.paymentDate', 'payment.referenceNumber', 'payment.channel', 'payment.receipt', 'payment.receipt.publicId'],
-    ['governmentId.idType', 'governmentId.file', 'governmentId.file.publicId'],
+    [
+      'governmentId.idType',
+      'governmentId.frontFile', 'governmentId.frontFile.publicId',
+      'governmentId.backFile', 'governmentId.backFile.publicId',
+    ],
     ['acceptedTerms'],
     [
       'declaredTruthful', 'declaredReviewed', 'declaredNotAutomatic',
@@ -285,9 +303,32 @@ export function ReservationWizard({
     return true;
   }
 
-  function next() {
+  /** Index of the Documents step, so the gate below cannot drift off it. */
+  const DOCUMENTS_STEP = STEPS.indexOf('Documents');
+
+  async function next() {
     setFormError(null);
     if (!validateStep(step)) return;
+
+    /*
+     * The ID is read HERE, on the way out of the Documents step — not on
+     * submit.
+     *
+     * Catching a wrong card at the end would mean telling someone who has
+     * just ticked five declarations to go back three steps. Catching it here
+     * costs them one file.
+     *
+     * A refusal returns without advancing; the reason is already on screen in
+     * the panel below, so there is nothing to add to `formError`. A scan that
+     * FAILED (no result, `idCheck.error` set) does not block — see the hook.
+     */
+    if (step === DOCUMENTS_STEP && idFrontRaw && idType) {
+      const outcome =
+        idCheck.result ??
+        (await idCheck.run(idFrontRaw, idBackRaw, idType as IdType, buyer.fullName));
+      if (outcome && !outcome.accepted) return;
+    }
+
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
   }
 
@@ -583,14 +624,34 @@ export function ReservationWizard({
         {step === 5 ? (
           <StepPanel
             title="Step 6 — Documentary Requirements"
-            note="Upload a valid government-issued ID. Further documents may be requested after submission."
+            note="Upload both sides of a valid government-issued ID. Further documents may be requested after submission."
           >
             <div className="mb-5">
               <label htmlFor="idType" className="block text-sm font-medium">
                 ID type<span className="ml-0.5 text-rose-500">*</span>
               </label>
-              <select id="idType" value={idType} onChange={(e) => setIdType(e.target.value as never)}
-                className={cn(fieldClass, 'mt-1.5')}>
+              <select
+                id="idType"
+                value={idType}
+                onChange={(e) => {
+                  setIdType(e.target.value as never);
+                  /*
+                   * Clear the previous verdict.
+                   *
+                   * It was reached against the OLD selection, so leaving it in
+                   * place meant a buyer who did exactly what the message asked
+                   * — "choose the matching ID type" — still saw the refusal and
+                   * still could not continue. `next()` reads `idCheck.result`
+                   * before running anything, so a stale verdict short-circuits
+                   * the recheck completely.
+                   *
+                   * Re-grading costs nothing: the scan is cached against the
+                   * files, and those have not changed.
+                   */
+                  idCheck.reset();
+                }}
+                className={cn(fieldClass, 'mt-1.5')}
+              >
                 <option value="">Select an ID type…</option>
                 {ID_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -599,11 +660,48 @@ export function ReservationWizard({
               ) : null}
             </div>
 
-            <FileUpload kind="client-document" slug="government-id" label="Government-issued ID"
-              value={idFile} onChange={setIdFile}
-              error={shownErrors['governmentId.file'] ?? shownErrors['governmentId.file.publicId']} />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FileUpload
+                kind="client-document"
+                slug="government-id-front"
+                label="Front of the ID"
+                value={idFrontFile}
+                onChange={setIdFrontFile}
+                onFileSelected={(f) => {
+                  setIdFrontRaw(f);
+                  idCheck.reset();
+                }}
+                error={
+                  shownErrors['governmentId.frontFile'] ??
+                  shownErrors['governmentId.frontFile.publicId']
+                }
+              />
+              <FileUpload
+                kind="client-document"
+                slug="government-id-back"
+                label="Back of the ID"
+                value={idBackFile}
+                onChange={setIdBackFile}
+                onFileSelected={(f) => {
+                  setIdBackRaw(f);
+                  idCheck.reset();
+                }}
+                error={
+                  shownErrors['governmentId.backFile'] ??
+                  shownErrors['governmentId.backFile.publicId']
+                }
+              />
+            </div>
+
+            <IdCheckPanel check={idCheck} />
 
             <p className="mt-4 text-xs text-neutral-500">
+              Photograph the two sides separately. The front is what identifies the card, so its
+              header and issuing office must be readable; the back carries what a reviewer needs —
+              the restrictions on a licence, the address on a PhilSys card.
+            </p>
+
+            <p className="mt-2 text-xs text-neutral-500">
               Uploaded documents undergo automated validation. Final verification and approval are
               performed by authorised St. Francis Square Realty personnel.
             </p>
@@ -680,7 +778,7 @@ export function ReservationWizard({
           {step < STEPS.length - 1 ? (
             <button
               type="button"
-              onClick={next}
+              onClick={() => void next()}
               className="rounded-md bg-brand-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
             >
               Continue
@@ -805,6 +903,76 @@ function Stepper({ current, onJump }: { current: number; onJump: (i: number) => 
         );
       })}
     </ol>
+  );
+}
+
+/**
+ * What the ID scan found.
+ *
+ * Three states worth telling apart, because the buyer's next action differs
+ * in each: still reading (wait), refused (fix the file), and passed-with-a-
+ * caveat (carry on, a person will look).
+ *
+ * The refusal is amber, not red. It is not an error — the form is working
+ * exactly as intended — and red here reads as "something broke", which sends
+ * people looking for a bug instead of at their file.
+ */
+function IdCheckPanel({ check }: { check: ReturnType<typeof useIdCheck> }) {
+  if (check.phase === 'idle') return null;
+
+  if (check.phase !== 'done') {
+    const label =
+      check.phase === 'loading-model'
+        ? 'Preparing the reader — the first check takes a few seconds longer'
+        : check.phase === 'reading-front'
+          ? 'Reading the front of your ID…'
+          : 'Reading the back of your ID…';
+
+    return (
+      <div className="mt-5 rounded-md border border-neutral-200 bg-neutral-50 px-3.5 py-3">
+        <div className="flex items-center gap-2.5 text-sm text-neutral-700">
+          <svg className="h-4 w-4 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+            <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+          </svg>
+          {label}
+        </div>
+        <p className="mt-1.5 text-xs text-neutral-500">
+          This runs on your device — the images are not sent anywhere to be read.
+        </p>
+      </div>
+    );
+  }
+
+  // The scan itself broke. Not the buyer's fault, so it does not block.
+  if (check.error) {
+    return (
+      <p className="mt-5 rounded-md bg-amber-50 px-3.5 py-3 text-sm text-amber-800">{check.error}</p>
+    );
+  }
+
+  const result = check.result;
+  if (!result) return null;
+
+  if (!result.accepted) {
+    return (
+      <div role="alert" className="mt-5 rounded-md border border-amber-300 bg-amber-50 px-3.5 py-3">
+        <p className="text-sm font-medium text-amber-900">Check your ID</p>
+        <p className="mt-1 text-sm text-amber-800">{result.message}</p>
+      </div>
+    );
+  }
+
+  const clean = result.verdict === 'match';
+  return (
+    <p
+      className={cn(
+        'mt-5 rounded-md px-3.5 py-3 text-sm',
+        clean ? 'bg-brand-50 text-brand-800' : 'bg-amber-50 text-amber-800',
+      )}
+    >
+      {result.message}
+    </p>
   );
 }
 

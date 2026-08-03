@@ -2,13 +2,9 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { Money } from '@sfsr/domain';
-import {
-  getAdminFirestore,
-  getProject,
-  getUnit,
-  listAvailableParking,
-} from '@sfsr/infrastructure/server';
+import { getAdminFirestore, getUnit, listAvailableParking } from '@sfsr/infrastructure/server';
 import { Card, PageHeader } from '@sfsr/ui';
+import { getCachedProject } from '@/lib/catalog';
 import { requireCapability } from '@/lib/session';
 import { ReservationWizard } from './wizard';
 
@@ -34,7 +30,11 @@ export default async function ReservePage({ params }: { params: Promise<{ unitId
   }
 
   const [project, parking, clientDoc] = await Promise.all([
-    getProject(db, unit.projectId),
+    // CACHED, unlike the unit above. A project's name and location do not go
+    // stale in a way that can hurt anyone, and this entry is already warm from
+    // the browse pages — so it costs no read and no wait on the slowest route
+    // in the portal. The UNIT is what has to be fresh, and it still is.
+    getCachedProject(unit.projectId),
     listAvailableParking(db, unit.projectId),
     // The buyer already gave us their name and contact details at
     // registration. RESERVATION.doc: "The system automatically retrieves the

@@ -102,7 +102,9 @@ export function AccountBar({
   const badge = TIER_BADGE[tier];
 
   return (
-    <div className="flex items-center justify-end gap-2 px-5 py-2">
+    // No vertical padding: the shell fixes the bar's height so it lines up
+    // with the sidebar's brand plate, and padding here would fight that.
+    <div className="flex h-full w-full items-center justify-end gap-2 px-5">
       <ThemeToggleCompact />
 
       <div className="relative" ref={menuRef}>

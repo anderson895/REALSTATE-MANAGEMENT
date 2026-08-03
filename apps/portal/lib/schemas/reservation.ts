@@ -1,5 +1,19 @@
 import { z } from 'zod';
-import { DOWN_PAYMENT_TIERS, FINANCING_OPTIONS, PAYMENT_TERMS, normalizeMobile } from '@sfsr/domain';
+import {
+  DOWN_PAYMENT_TIERS,
+  FINANCING_OPTIONS,
+  ID_TYPES,
+  PAYMENT_TERMS,
+  normalizeMobile,
+} from '@sfsr/domain';
+
+/**
+ * Re-exported so the form keeps importing its options from here, while the
+ * list itself lives in the domain beside the OCR patterns that grade it. Two
+ * copies would eventually disagree, and the failure would be silent: an option
+ * the buyer can pick that no pattern can ever recognise.
+ */
+export { ID_TYPES };
 
 /**
  * Reservation application contract, from RESERVATION.doc.
@@ -21,15 +35,6 @@ export const PAYMENT_CHANNELS = [
 
 export const CIVIL_STATUSES = ['Single', 'Married', 'Widowed', 'Separated'] as const;
 
-export const ID_TYPES = [
-  'Philippine Passport',
-  "Driver's License",
-  'UMID / SSS',
-  'PhilSys National ID',
-  'PRC ID',
-  'Postal ID',
-  'Voter’s ID',
-] as const;
 
 const uploadedFile = z.object({
   publicId: required('File'),
@@ -88,9 +93,19 @@ export const reservationSchema = z.object({
   }),
 
   // ── STEP 6 — Documentary Requirements ──
+  /**
+   * BOTH sides of the ID.
+   *
+   * The front is what identifies the card — its header and issuing office.
+   * The back is what a reviewer actually needs to read: the restrictions on a
+   * driver's licence, the address on a PhilSys card. A single photo of the
+   * front looks complete and is not, which is why this asks for two files
+   * rather than one optional extra.
+   */
   governmentId: z.object({
     idType: z.enum(ID_TYPES),
-    file: uploadedFile,
+    frontFile: uploadedFile,
+    backFile: uploadedFile,
   }),
 
   // ── STEP 7 — Terms and Conditions ──

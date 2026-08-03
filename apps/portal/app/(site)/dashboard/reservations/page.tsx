@@ -1,11 +1,15 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { Money } from '@sfsr/domain';
+import { Money, canRequestWithdrawal } from '@sfsr/domain';
 import { getAdminFirestore } from '@sfsr/infrastructure/server';
 import { Card, EmptyState, PageHeader, StatusBadge } from '@sfsr/ui';
 import { requireClient } from '@/lib/session';
+import { WithdrawButton } from './withdraw-button';
 
 export const metadata: Metadata = { title: 'My Reservations' };
+
+/** RESERVATION.doc, STEP 2. Non-refundable — clause 4. */
+const RESERVATION_FEE_CENTAVOS = 5_000_000;
 
 interface ReservationRow {
   readonly number: string;
@@ -13,6 +17,7 @@ interface ReservationRow {
   readonly status: string;
   readonly reservedAt: Date | null;
   readonly downPaymentTier: number;
+  readonly withdrawalRequestedAt: Date | null;
 }
 
 /** How each workflow status reads to a buyer, who should not see internal jargon. */
@@ -70,6 +75,7 @@ export default async function MyReservationsPage() {
       status: String(data.status ?? ''),
       reservedAt: data.reservedAt?.toDate?.() ?? null,
       downPaymentTier: Number(data.downPaymentTier ?? 0),
+      withdrawalRequestedAt: data.withdrawalRequestedAt?.toDate?.() ?? null,
     };
   });
 
@@ -135,10 +141,36 @@ export default async function MyReservationsPage() {
                   <div>
                     <dt className="text-neutral-400">Reservation fee</dt>
                     <dd className="tabular mt-0.5 font-medium">
-                      {Money.fromPesos(50_000).format()}
+                      {Money.fromCentavos(RESERVATION_FEE_CENTAVOS).format()}
                     </dd>
                   </div>
                 </dl>
+
+                {reservation.withdrawalRequestedAt ? (
+                  <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3.5 py-3">
+                    <p className="text-sm font-medium text-amber-900">
+                      Withdrawal requested{' '}
+                      {reservation.withdrawalRequestedAt.toLocaleDateString('en-PH', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </p>
+                    <p className="mt-1 text-sm text-amber-800">
+                      Our team will contact you. Until then the reservation continues through its
+                      normal review, and your{' '}
+                      {Money.fromCentavos(RESERVATION_FEE_CENTAVOS).format()} fee remains
+                      non-refundable.
+                    </p>
+                  </div>
+                ) : canRequestWithdrawal(reservation.status) ? (
+                  <div className="mt-4 flex justify-end">
+                    <WithdrawButton
+                      reservationNumber={reservation.number}
+                      reservationFeeCentavos={RESERVATION_FEE_CENTAVOS}
+                    />
+                  </div>
+                ) : null}
               </Card>
             );
           })}

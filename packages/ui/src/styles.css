@@ -17,6 +17,19 @@
  */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * Collapsed sidebar, driven by a class on <html> — the same trick as `dark`
+ * above, and for the same reason.
+ *
+ * The toggle button and the aside sit on opposite sides of the server/client
+ * boundary: the aside is server-rendered so its nav costs no JavaScript, and
+ * React state cannot be shared across that line. A class on the root element
+ * can be, and the server can set it from a cookie on the very first render, so
+ * a visitor who collapsed the sidebar yesterday does not watch it snap shut
+ * after paint.
+ */
+@custom-variant rail (&:where(.sidebar-collapsed, .sidebar-collapsed *));
+
 @theme {
   /*
    * St. Francis Square Realty — deep green.

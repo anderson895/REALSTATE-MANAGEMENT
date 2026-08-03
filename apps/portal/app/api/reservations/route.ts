@@ -141,7 +141,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       buyerUid: session.uid,
       docType: 'Government ID',
       idType: data.governmentId.idType,
-      file: data.governmentId.file,
+      // Stored as two fields, not an array: a reviewer opening this record
+      // needs to know WHICH side they are looking at.
+      frontFile: data.governmentId.frontFile,
+      backFile: data.governmentId.backFile,
       status: 'Pending Validation',
       uploadedBy: session.uid,
       uploadedAt: FieldValue.serverTimestamp(),

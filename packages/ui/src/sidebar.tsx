@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { cn } from './cn';
 import { MobileNav } from './mobile-nav';
+import { SidebarToggle } from './sidebar-toggle';
 import { SHELL_STYLES, type ShellVariant } from './shell-theme';
 import type { NavSection } from './sidebar-types';
 
@@ -74,6 +75,17 @@ export interface AppShellProps {
   readonly media?: ReactNode;
 }
 
+/**
+ * Height of the brand plate AND the topbar. They MUST match.
+ *
+ * Both used to size themselves from their own contents, so the sidebar's plate
+ * came out at ~79px (three lines of wrapped brand text plus `py-4`) and the
+ * topbar at ~51px (an avatar plus `py-2`). The two white areas met at the top
+ * of the page in a visible step. Pinning both to one constant is what stops
+ * that from drifting back the next time either one's copy changes.
+ */
+const HEADER_HEIGHT = 'h-16';
+
 export function AppShell({
   brand,
   subtitle,
@@ -103,22 +115,44 @@ export function AppShell({
       <div className="flex">
         {/* sticky + h-screen: stays pinned while only the main column scrolls */}
         <aside
-          className={cn('sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r md:flex', s.surface)}
+          className={cn('sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r transition-[width] duration-200 md:flex',
+            'rail:w-16', s.surface)}
         >
-          <div className={cn('flex shrink-0 items-center gap-2.5 px-5 py-4', s.brandBlock)}>
+          <div
+            className={cn(
+              'flex shrink-0 items-center gap-2.5 px-5',
+              'rail:justify-center rail:px-0',
+              HEADER_HEIGHT,
+              s.brandBlock,
+            )}
+          >
             {logo}
-            <div className="min-w-0">
+            <div className="min-w-0 rail:hidden">
               <p className={s.brandText}>{brand}</p>
               {subtitle ? <p className={cn('mt-0.5', s.subtitleText)}>{subtitle}</p> : null}
             </div>
           </div>
 
-          {/* min-h-0 is required for overflow to work inside a flex column */}
-          <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+          {/*
+           * min-h-0 is required for overflow to work inside a flex column.
+           *
+           * Without `media` the nav takes the slack, as it always has. WITH
+           * media it only takes what it needs and hands the rest to the photo
+           * — otherwise a seven-item menu left ~285px of bare green above the
+           * render, and the sidebar looked half-finished. `shrink` (not
+           * `shrink-0`) keeps a twenty-item menu able to scroll instead of
+           * pushing the photo off the bottom.
+           */}
+          <nav
+            className={cn(
+              'min-h-0 overflow-y-auto px-3 py-4',
+              media ? 'shrink' : 'flex-1',
+            )}
+          >
             {sections.map((section, i) => (
               <div key={section.title ?? i} className={cn(i > 0 && 'mt-6')}>
                 {section.title ? (
-                  <p className={cn('px-2 pb-2', s.sectionTitle)}>{section.title}</p>
+                  <p className={cn('px-2 pb-2 rail:hidden', s.sectionTitle)}>{section.title}</p>
                 ) : null}
                 <ul className="space-y-0.5">
                   {section.items.map((item) => {
@@ -128,14 +162,16 @@ export function AppShell({
                       <li key={item.href}>
                         <Link
                           href={item.href}
+                          title={item.label}
                           aria-current={active ? 'page' : undefined}
                           className={cn(
                             'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors',
+                            'rail:justify-center rail:px-0',
                             active ? s.itemActive : s.item,
                           )}
                         >
                           {item.icon ? <span className="shrink-0">{item.icon}</span> : null}
-                          <span className="flex-1 truncate">{item.label}</span>
+                          <span className="flex-1 truncate rail:hidden">{item.label}</span>
                           {item.badge ? (
                             <span
                               className={cn(
@@ -157,9 +193,9 @@ export function AppShell({
 
           {/* Sits BELOW the scrolling nav, so a long menu never pushes it out
               of reach and it never steals height the menu needs. */}
-          {media ? <div className="shrink-0">{media}</div> : null}
+          {media ? <div className="min-h-40 flex-1 overflow-hidden rail:hidden">{media}</div> : null}
 
-          {footer ? <div className={cn('shrink-0 px-4 py-3', s.footer)}>{footer}</div> : null}
+          {footer ? <div className={cn('shrink-0 px-4 py-3 rail:hidden', s.footer)}>{footer}</div> : null}
         </aside>
 
         <main className="min-w-0 flex-1">
@@ -174,7 +210,13 @@ export function AppShell({
            * scrolls away and the drawer carries the navigation.
            */}
           {topbar ? (
-            <div className="relative z-20 border-b border-neutral-200 bg-white/95 backdrop-blur md:sticky md:top-0 dark:border-neutral-800 dark:bg-neutral-900/95">
+            <div
+              className={cn(
+                'relative z-20 flex items-center border-b border-neutral-200 bg-white/95 backdrop-blur md:sticky md:top-0 dark:border-neutral-800 dark:bg-neutral-900/95',
+                HEADER_HEIGHT,
+              )}
+            >
+              <SidebarToggle className="ml-3 hidden h-8 w-8 shrink-0 items-center justify-center rounded-md text-neutral-500 transition-colors hover:bg-neutral-100 md:flex dark:hover:bg-neutral-800" />
               {topbar}
             </div>
           ) : null}

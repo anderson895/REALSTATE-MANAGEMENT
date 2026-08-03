@@ -6,6 +6,7 @@ import { StatusBadge, cloudinaryUrl } from '@sfsr/ui';
 import { getCachedProject, getCachedUnit } from '@/lib/catalog';
 import { getTier } from '@/lib/session';
 import { PriceCalculator } from './price-calculator';
+import { ReserveButton } from './reserve-button';
 
 /** RESERVATION.doc, STEP 2: "Reservation Fee ₱_____ (System Generated- put 50,000.00)". */
 const RESERVATION_FEE_CENTAVOS = 5_000_000;
@@ -152,12 +153,7 @@ export default async function UnitPage({ params }: { params: Promise<{ unitId: s
                   A {Money.fromCentavos(RESERVATION_FEE_CENTAVOS).format()} reservation fee applies
                   and forms part of the purchase price. It is non-refundable and non-transferable.
                 </p>
-                <Link
-                  href={`/reserve/${unit.id}`}
-                  className="mt-4 inline-block rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
-                >
-                  Reserve Unit {unit.unitNo}
-                </Link>
+                <ReserveButton unitId={unit.id} unitNo={unit.unitNo} />
               </>
             ) : (
               <>

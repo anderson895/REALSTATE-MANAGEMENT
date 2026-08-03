@@ -59,17 +59,49 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       sections={navigationFor(tier)}
       currentPath={currentPath}
       media={
-        <div className="relative h-40 w-full">
+        // h-full, not a fixed height: the shell hands this panel whatever the
+        // menu did not use, so the render grows to fill the sidebar instead of
+        // leaving bare green above it.
+        <div className="relative h-full w-full overflow-hidden">
           <Image
-            src="/hero.jpg"
+            src="/sidebar-tower.png"
             alt=""
             fill
-            sizes="256px"
+            /*
+             * 640px, NOT the 256px the panel is wide.
+             *
+             * `sizes` must describe how wide the IMAGE renders, not the box it
+             * is clipped to. This source is landscape (1536×1024) in a roughly
+             * 256×400 panel, so `object-cover` scales it to about 600px wide
+             * and shows the middle slice. Asking for 256px meant the browser
+             * was handed a 256px-wide picture and stretched it to 600 — a
+             * 2.3× upscale, which is exactly what the blur was.
+             */
+            sizes="640px"
             className="object-cover"
+            // The source is landscape (1536×1024) in a ~256px-wide panel, so
+            // `object-cover` shows a narrow vertical slice at full height.
+            // The tower sits right of centre; left at 50% the slice would
+            // frame the car park in front of it instead.
+            //
+            // Inline rather than `object-[62%_center]` because this is a value
+            // that wants nudging by eye, and a plain style property cannot be
+            // silently dropped by a class scan the way an arbitrary utility in
+            // a rarely-rendered branch can.
+            style={{ objectPosition: '62% center' }}
           />
-          {/* Fades the top edge into the green so the render reads as part of
-              the panel rather than a photograph dropped on top of it. */}
-          <div className="absolute inset-0 bg-gradient-to-b from-brand-600 via-transparent to-brand-600/30" />
+          {/*
+           * The render is vignetted — its edges feather out to a pale grey.
+           * Left alone on a deep-green panel that reads as a grey halo round
+           * the photo, not a blend.
+           *
+           * Two short gradients at the ends rather than one full-height one:
+           * a single green→transparent→green wash would dim the middle of the
+           * image too, and the middle is the tower. These cover only the
+           * bands where the vignette actually is.
+           */}
+          <div className="absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-brand-600 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-brand-600 to-transparent" />
         </div>
       }
       topbar={

@@ -32,6 +32,7 @@ export function FileUpload({
   hint,
   value,
   onChange,
+  onFileSelected,
   error,
 }: {
   kind: 'reservation-payment' | 'client-document';
@@ -40,6 +41,15 @@ export function FileUpload({
   hint?: string;
   value: UploadedFile | null;
   onChange: (file: UploadedFile | null) => void;
+  /**
+   * The RAW local file, handed over as soon as it is chosen.
+   *
+   * Needed because the Cloudinary asset lands as `authenticated`: its URL will
+   * not open on its own, so a caller that wants to READ the image — to run OCR
+   * over an ID, say — cannot fetch it back afterwards. It has to see the
+   * bytes here or never.
+   */
+  onFileSelected?: (file: File | null) => void;
   error?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -48,6 +58,7 @@ export function FileUpload({
 
   async function upload(file: File): Promise<void> {
     setLocalError(null);
+    onFileSelected?.(file);
 
     if (file.size > MAX_BYTES) {
       setLocalError('Maximum file size is 10 MB.');
