@@ -279,7 +279,10 @@ export function RegisterForm() {
             onChange={(e) => set('password', e.target.value)}
             error={errors.password}
           />
-          <ul className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
+          {/* One column on the narrowest phones. Two columns of "At least one
+              number" cannot fit 320px, and a grid item will not shrink below
+              its min-content — so the pair pushed the whole form 8px wide. */}
+          <ul className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 min-[360px]:grid-cols-2">
             {PASSWORD_REQUIREMENTS.map((requirement) => {
               const met = form.password.length > 0 && !unmet.has(requirement.rule);
               return (
@@ -318,12 +321,26 @@ export function RegisterForm() {
       <section className="space-y-3">
         <SectionTitle>Verification and consent</SectionTitle>
 
+        {/*
+         * reCAPTCHA renders a FIXED 304px iframe that cannot be made narrower.
+         * On a 320px phone the page's own 24px gutters leave 272px, so the
+         * widget pushed the whole document 8px wide.
+         *
+         * Scrolling it inside its own box rather than scaling it down: a CSS
+         * transform on an ancestor of the widget creates a new containing
+         * block for fixed-position elements, which is what reCAPTCHA's
+         * challenge overlay uses — the puzzle would open in the wrong place,
+         * or off-screen. A few pixels of scroll on the narrowest phones is the
+         * cheaper trade.
+         */}
+        <div className="overflow-x-auto">
         <Recaptcha
           siteKey={publicConfig.recaptcha.siteKey}
           onChange={(token) => set('recaptchaToken', token ?? '')}
           error={errors.recaptchaToken}
           resetKey={captchaReset}
         />
+        </div>
 
         <ConsentRow error={errors.certifyTruthful}>
           <Checkbox

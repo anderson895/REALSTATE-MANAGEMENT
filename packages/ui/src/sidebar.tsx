@@ -110,6 +110,7 @@ export function AppShell({
         footer={footer}
         variant={variant}
         logo={logo}
+        trailing={topbar}
       />
 
       <div className="flex">
@@ -212,7 +213,7 @@ export function AppShell({
           {topbar ? (
             <div
               className={cn(
-                'relative z-20 flex items-center border-b border-neutral-200 bg-white/95 backdrop-blur md:sticky md:top-0 dark:border-neutral-800 dark:bg-neutral-900/95',
+                'z-20 hidden items-center border-b border-neutral-200 bg-white/95 backdrop-blur md:sticky md:top-0 md:flex dark:border-neutral-800 dark:bg-neutral-900/95',
                 HEADER_HEIGHT,
               )}
             >

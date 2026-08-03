@@ -104,7 +104,7 @@ export function AccountBar({
   return (
     // No vertical padding: the shell fixes the bar's height so it lines up
     // with the sidebar's brand plate, and padding here would fight that.
-    <div className="flex h-full w-full items-center justify-end gap-2 px-5">
+    <div className="flex h-full w-full items-center justify-end gap-2 md:px-5">
       <ThemeToggleCompact />
 
       <div className="relative" ref={menuRef}>
@@ -121,7 +121,10 @@ export function AccountBar({
           >
             {initialsOf(name)}
           </span>
-          <span className="min-w-0 text-left">
+          {/* Below `sm` only the avatar shows: the mobile header already
+              carries the company name, and the dropdown repeats @username and
+              the tier the moment it opens. */}
+          <span className="hidden min-w-0 text-left sm:block">
             <span className="block truncate text-sm font-medium text-neutral-800 dark:text-neutral-100">
               {name}
             </span>

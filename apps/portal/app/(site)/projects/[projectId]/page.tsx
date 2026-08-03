@@ -228,7 +228,55 @@ function FloorGroup({
         </span>
       </summary>
 
-      <div className="overflow-x-auto border-t border-neutral-100 dark:border-neutral-800">
+      {/*
+       * Cards below `sm`, the table above.
+       *
+       * `overflow-x-auto` on its own did nothing here: the table is
+       * `table-fixed w-full`, so it never grows past the container and never
+       * has anything to scroll. The percentage columns simply collapsed —
+       * `w-[14%]` of a 327px phone is a 46px "Unit" column.
+       */}
+      <ul className="divide-y divide-neutral-100 border-t border-neutral-100 sm:hidden dark:divide-neutral-800 dark:border-neutral-800">
+        {rows.map((unit) => (
+          <li key={unit.id} className="px-4 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <Link
+                  href={`/units/${unit.id}`}
+                  className="font-medium text-brand-700 hover:underline dark:text-brand-300"
+                >
+                  {unit.unitNo}
+                </Link>
+                {unit.tower ? (
+                  <span className="ml-1.5 text-xs text-neutral-500">{unit.tower}</span>
+                ) : null}
+                <p className="mt-0.5 text-xs text-neutral-500">
+                  {unit.unitType} · {unit.areaSqm} sqm
+                </p>
+              </div>
+              <StatusBadge status={unit.status} />
+            </div>
+
+            <div className="mt-2 flex items-end justify-between gap-3">
+              <p className="tabular text-sm font-semibold">
+                {Money.fromCentavos(unit.purchasePriceCentavos).format()}
+              </p>
+              <Link
+                href={`/units/${unit.id}`}
+                className={
+                  unit.status === 'Available'
+                    ? 'shrink-0 text-xs font-semibold text-brand-600 hover:text-accent-500'
+                    : 'shrink-0 text-xs text-neutral-500'
+                }
+              >
+                {unit.status === 'Available' ? 'View & Reserve →' : 'View →'}
+              </Link>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <div className="hidden overflow-x-auto border-t border-neutral-100 sm:block dark:border-neutral-800">
         <table className="w-full table-fixed text-sm">
           <thead className="text-left text-xs text-neutral-500">
             <tr>

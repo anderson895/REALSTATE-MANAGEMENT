@@ -25,6 +25,7 @@ export function MobileNav({
   footer,
   variant = 'light',
   logo,
+  trailing,
 }: {
   brand: string;
   subtitle?: string;
@@ -33,6 +34,14 @@ export function MobileNav({
   footer?: ReactNode;
   variant?: ShellVariant;
   logo?: ReactNode;
+  /**
+   * Sits at the right of the mobile header — the account chip.
+   *
+   * On a phone the shell's `topbar` is hidden and its contents come here
+   * instead, so who-is-signed-in shares the row with the hamburger rather than
+   * taking a second full-width band under it.
+   */
+  trailing?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const s = SHELL_STYLES[variant];
@@ -94,19 +103,56 @@ export function MobileNav({
           {subtitle ? <p className="truncate text-[11px] text-neutral-500">{subtitle}</p> : null}
         </div>
         {/* The sidebar's theme picker is unreachable on a phone, so the
-            compact cycler lives in the header instead. */}
+            compact cycler lives in the header instead. It renders nothing when
+            the app pins a theme. */}
         <ThemeToggleCompact className="shrink-0" />
+        {trailing ? <div className="shrink-0">{trailing}</div> : null}
       </header>
 
-      {open ? (
-        <div className="fixed inset-0 z-40 md:hidden">
-          <button
-            type="button"
-            aria-label="Close navigation"
-            onClick={() => setOpen(false)}
-            className="absolute inset-0 bg-black/40"
-          />
-          <div className={cn('absolute inset-y-0 left-0 flex w-72 flex-col border-r', s.surface)}>
+      {/*
+       * Always mounted, shown and hidden with classes.
+       *
+       * It used to be `{open ? … : null}`, which cannot animate: React removes
+       * the node the instant it closes, so there is nothing left on screen to
+       * transition. Keeping it mounted lets the panel slide and the backdrop
+       * fade both ways.
+       *
+       * `visibility` is in the transition list on purpose. It is what keeps
+       * the drawer out of the tab order and the accessibility tree while
+       * closed — but as a transitioned property it holds `visible` for the
+       * full duration on the way out, so the slide plays to the end instead of
+       * being cut off at frame one.
+       *
+       * `inert` is the belt to that braces: while closed, nothing inside can
+       * be focused or read out, even mid-animation.
+       */}
+      <div
+        inert={!open}
+        className={cn(
+          'fixed inset-0 z-40 transition-[visibility] duration-200 md:hidden',
+          'motion-reduce:transition-none',
+          open ? 'visible' : 'invisible',
+        )}
+      >
+        <button
+          type="button"
+          aria-label="Close navigation"
+          tabIndex={open ? 0 : -1}
+          onClick={() => setOpen(false)}
+          className={cn(
+            'absolute inset-0 bg-black/40 transition-opacity duration-200 ease-out',
+            'motion-reduce:transition-none',
+            open ? 'opacity-100' : 'opacity-0',
+          )}
+        />
+        <div
+          className={cn(
+            'absolute inset-y-0 left-0 flex w-72 flex-col border-r',
+            'transition-transform duration-200 ease-out motion-reduce:transition-none',
+            open ? 'translate-x-0' : '-translate-x-full',
+            s.surface,
+          )}
+        >
             <div className={cn('flex shrink-0 items-center gap-2.5 px-5 py-4', s.brandBlock)}>
               {logo}
               <div className="min-w-0 flex-1">
@@ -166,10 +212,9 @@ export function MobileNav({
               ))}
             </nav>
 
-            {footer ? <div className={cn('shrink-0 px-4 py-3', s.footer)}>{footer}</div> : null}
-          </div>
+          {footer ? <div className={cn('shrink-0 px-4 py-3', s.footer)}>{footer}</div> : null}
         </div>
-      ) : null}
+      </div>
     </>
   );
 }

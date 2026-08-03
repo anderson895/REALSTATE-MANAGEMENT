@@ -179,7 +179,17 @@ export default async function HomePage() {
        * already built to do — scroll — instead of shoving its neighbour.
        */}
       <div className="mx-auto grid w-[calc(100%-3rem)] max-w-6xl items-start gap-10 py-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-        <section>
+        {/*
+         * `min-w-0` on BOTH sections.
+         *
+         * A grid item defaults to `min-width: auto`, so it refuses to shrink
+         * below its own min-content. The carousel already had `min-w-0` and
+         * `overflow-x-auto`, but that only frees the track — it cannot help
+         * while an ancestor is pinned open. The section held itself at 1024px
+         * (five 176px cards plus gaps and arrows) and pushed the whole page
+         * 649px past a 399px phone.
+         */}
+        <section className="min-w-0">
           <h2 className="mb-6 text-xl font-semibold">Simple Steps to Reserve</h2>
           {/* Four across only at `xl`. Between `lg` and `xl` the left track is
               ~400px, and four columns of 88px turn "Submit Requirements" into
@@ -200,7 +210,7 @@ export default async function HomePage() {
           </ol>
         </section>
 
-        <section>
+        <section className="min-w-0">
           <header className="mb-6 flex items-baseline justify-between gap-4">
             <h2 className="text-xl font-semibold">Featured Projects</h2>
             <Link

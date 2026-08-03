@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { getAdminFirestore } from '@sfsr/infrastructure/server';
 import { Card, PageHeader } from '@sfsr/ui';
 import { requireClient } from '@/lib/session';
+import { ChangePassword } from './change-password';
 
 export const metadata: Metadata = { title: 'My Profile' };
 
@@ -68,6 +69,13 @@ export default async function ProfilePage() {
             }
           />
         </dl>
+      </Card>
+
+      <Card className="mb-6">
+        <h2 className="border-b border-neutral-200 px-5 py-3 text-sm font-medium dark:border-neutral-800">
+          Password
+        </h2>
+        <ChangePassword />
       </Card>
 
       <Card>

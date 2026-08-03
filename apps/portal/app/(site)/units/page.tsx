@@ -282,7 +282,55 @@ function FlatList({
 
   return (
     <>
-      <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+      {/*
+       * Two renderings of the same rows: cards below `sm`, the table above.
+       *
+       * A six-column table cannot be read on a 327px screen. Letting it scroll
+       * sideways is barely better — a buyer comparing prices would be dragging
+       * the price column in and out of view. The wrapper here used to be
+       * `overflow-hidden`, which did not even scroll: it simply CUT the last
+       * columns off.
+       *
+       * `hidden` is display:none, so the copy that is not showing leaves the
+       * accessibility tree too and a screen reader hears the rows once.
+       */}
+      <ul className="space-y-3 sm:hidden">
+        {visible.map((unit) => (
+          <li key={unit.id} className="rounded-lg border border-neutral-200 bg-white p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-medium">
+                  {unit.unitNo}
+                  {unit.tower ? (
+                    <span className="ml-1.5 text-xs font-normal text-neutral-500">{unit.tower}</span>
+                  ) : null}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-neutral-500">
+                  {projectById.get(unit.projectId)?.name ?? unit.projectId}
+                </p>
+              </div>
+              <StatusBadge status={unit.status} />
+            </div>
+
+            <p className="mt-2 text-xs text-neutral-500">
+              {unit.unitType} · {unit.areaSqm} sqm
+            </p>
+            <div className="mt-2 flex items-end justify-between gap-3">
+              <p className="tabular text-sm font-semibold">
+                {Money.fromCentavos(unit.purchasePriceCentavos).format()}
+              </p>
+              <Link
+                href={`/units/${unit.id}`}
+                className="shrink-0 text-xs font-semibold text-brand-600 hover:text-accent-500"
+              >
+                View &rarr;
+              </Link>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <div className="hidden overflow-hidden rounded-lg border border-neutral-200 bg-white sm:block">
         <table className="w-full text-sm">
           <thead className="border-b border-neutral-200 bg-neutral-50 text-left">
             <tr className="text-xs uppercase tracking-wider text-neutral-500">
