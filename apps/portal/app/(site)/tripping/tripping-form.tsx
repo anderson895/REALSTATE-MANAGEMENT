@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { FormError, SubmitButton, TextField, fieldClass } from '@sfsr/ui';
 
@@ -43,6 +44,8 @@ export function TrippingForm({
     }
 
     setBusy(true);
+    const toastId = toast.loading('Submitting your request…');
+
     try {
       const response = await fetch('/api/trippings', {
         method: 'POST',
@@ -51,13 +54,24 @@ export function TrippingForm({
       });
       if (!response.ok) {
         const body = (await response.json()) as { error?: string };
-        setError(body.error ?? 'Could not submit your request.');
+        const message = body.error ?? 'Could not submit your request.';
+        setError(message);
+        toast.error(message, { id: toastId });
         return;
       }
+
+      toast.success('Site viewing requested', {
+        id: toastId,
+        description: `We will confirm your ${preferredDate} visit by email.`,
+        action: { label: 'Browse units', onClick: () => router.push('/units') },
+      });
+
       setDone(true);
       router.refresh();
     } catch {
-      setError('Could not submit your request. Please try again.');
+      const message = 'Could not submit your request. Please try again.';
+      setError(message);
+      toast.error(message, { id: toastId });
     } finally {
       setBusy(false);
     }

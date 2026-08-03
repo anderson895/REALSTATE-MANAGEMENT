@@ -58,6 +58,20 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       }
       sections={navigationFor(tier)}
       currentPath={currentPath}
+      media={
+        <div className="relative h-40 w-full">
+          <Image
+            src="/hero.jpg"
+            alt=""
+            fill
+            sizes="256px"
+            className="object-cover"
+          />
+          {/* Fades the top edge into the green so the render reads as part of
+              the panel rather than a photograph dropped on top of it. */}
+          <div className="absolute inset-0 bg-gradient-to-b from-brand-600 via-transparent to-brand-600/30" />
+        </div>
+      }
       topbar={
         <AccountBar
           tier={tier}

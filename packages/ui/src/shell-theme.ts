@@ -61,10 +61,12 @@ export const SHELL_STYLES: Record<ShellVariant, ShellStyles> = {
     brandText: 'text-[13px] font-bold uppercase leading-tight tracking-wide text-brand-700 dark:text-brand-300',
     subtitleText: 'text-[10px] uppercase tracking-[0.12em] text-neutral-500',
     sectionTitle: 'text-[11px] font-semibold uppercase tracking-[0.12em] text-white/45',
-    // The transparent left border is load-bearing: without it the 2px gold bar
-    // on the active item shifts every other label sideways as you navigate.
-    item: 'border-l-2 border-transparent text-white/75 hover:bg-white/10 hover:text-white',
-    itemActive: 'border-l-2 border-accent-400 bg-brand-500 font-medium text-white',
+    item: 'text-white/75 hover:bg-white/10 hover:text-white',
+    // Filled gold, per the reference design — not the earlier gold left bar on
+    // a lighter green. On a green panel a slightly-lighter green says "hover",
+    // not "you are here"; the gold is unmistakable. Text goes to the darkest
+    // green rather than white, because white on #d99a35 is barely readable.
+    itemActive: 'bg-accent-400 font-semibold text-brand-900',
     badge: 'bg-accent-500 text-white',
     footer: 'border-t border-white/15',
     closeButton: 'text-brand-700 hover:bg-neutral-100 dark:text-brand-300 dark:hover:bg-neutral-800',

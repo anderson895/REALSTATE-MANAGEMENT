@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
+import { toast } from 'sonner';
 import { getClientAuth } from '@sfsr/infrastructure';
 import { ThemeToggleCompact } from '@sfsr/ui';
 import type { ClientTier } from '@sfsr/domain';
@@ -83,8 +84,16 @@ export function AccountBar({
   }, [open]);
 
   async function onSignOut() {
+    const toastId = toast.loading('Signing you out…');
     await signOut(getClientAuth()).catch(() => undefined);
     await fetch('/api/auth/session', { method: 'DELETE' });
+
+    toast.success('Signed out', {
+      id: toastId,
+      description: 'Your session on this device has ended.',
+      action: { label: 'Sign back in', onClick: () => router.push('/login') },
+    });
+
     router.push('/');
     router.refresh();
   }

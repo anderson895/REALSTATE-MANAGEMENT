@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signInWithEmailAndPassword } from 'firebase/auth';
+import { toast } from 'sonner';
 import { getClientAuth } from '@sfsr/infrastructure';
 import { Checkbox, FormError, SubmitButton, TextField } from '@sfsr/ui';
 
@@ -33,6 +34,12 @@ export function LoginForm() {
     setError(null);
     setBusy(true);
 
+    // One toast for the whole attempt: raised as a spinner here, then replaced
+    // in place by passing the same `id`. Raising a second toast on success
+    // would leave the "Signing you in…" spinner stacked above it, still
+    // spinning, describing something that already finished.
+    const toastId = toast.loading('Signing you in…');
+
     try {
       const resolved = await fetch('/api/auth/resolve-username', {
         method: 'POST',
@@ -52,14 +59,34 @@ export function LoginForm() {
 
       if (!response.ok) {
         const body = (await response.json()) as { error?: string };
-        setError(body.error ?? 'Sign-in failed. Please try again.');
+        const message = body.error ?? 'Sign-in failed. Please try again.';
+        setError(message);
+        toast.error(message, { id: toastId });
         return;
       }
 
-      router.push(params.get('next') ?? '/dashboard/reservations');
+      // `displayName` is on the token already, so greeting them by name costs
+      // no extra request.
+      const name = credential.user.displayName?.split(' ')[0];
+
+      const next = params.get('next');
+      toast.success(name ? `Welcome back, ${name}!` : 'Signed in', {
+        id: toastId,
+        description: `Signed in as @${username}`,
+        // Only offered when the sign-in is sending them somewhere ELSE — a
+        // deep link they were bounced off. Landing on My Reservations and
+        // being offered a button to My Reservations is furniture.
+        action: next
+          ? { label: 'My Reservations', onClick: () => router.push('/dashboard/reservations') }
+          : undefined,
+      });
+
+      router.push(next ?? '/dashboard/reservations');
       router.refresh();
     } catch {
-      setError('Incorrect username or password.');
+      const message = 'Incorrect username or password.';
+      setError(message);
+      toast.error(message, { id: toastId });
     } finally {
       setBusy(false);
     }

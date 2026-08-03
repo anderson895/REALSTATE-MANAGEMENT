@@ -63,6 +63,15 @@ export interface AppShellProps {
    * notifications. Distinct from `footer`, which sits inside the sidebar.
    */
   readonly topbar?: ReactNode;
+  /**
+   * Panel between the menu and the footer — the buyer portal puts a project
+   * render there, per the reference design.
+   *
+   * Desktop only, and deliberately: on a phone the drawer already has to fit
+   * the whole menu plus the footer in one viewport, and a decorative photo is
+   * the first thing that should lose that argument.
+   */
+  readonly media?: ReactNode;
 }
 
 export function AppShell({
@@ -75,6 +84,7 @@ export function AppShell({
   variant = 'light',
   logo,
   topbar,
+  media,
 }: AppShellProps) {
   const s = SHELL_STYLES[variant];
 
@@ -144,6 +154,10 @@ export function AppShell({
               </div>
             ))}
           </nav>
+
+          {/* Sits BELOW the scrolling nav, so a long menu never pushes it out
+              of reach and it never steals height the menu needs. */}
+          {media ? <div className="shrink-0">{media}</div> : null}
 
           {footer ? <div className={cn('shrink-0 px-4 py-3', s.footer)}>{footer}</div> : null}
         </aside>

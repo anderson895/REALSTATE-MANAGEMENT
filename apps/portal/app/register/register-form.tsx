@@ -10,6 +10,7 @@ import {
   USERNAME_POLICY,
   validatePassword,
 } from '@sfsr/domain';
+import { toast } from 'sonner';
 import { getClientAuth } from '@sfsr/infrastructure';
 import { publicConfig } from '@sfsr/infrastructure';
 import { Checkbox, FormError, SubmitButton, TextField, fieldClass } from '@sfsr/ui';
@@ -92,6 +93,10 @@ export function RegisterForm() {
     }
 
     setBusy(true);
+    // Raised only after validation passes — a spinner that appears and dies in
+    // the same frame because a field was blank is just a flicker.
+    const toastId = toast.loading('Creating your account…');
+
     try {
       const response = await fetch('/api/auth/register', {
         method: 'POST',
@@ -107,7 +112,9 @@ export function RegisterForm() {
 
       if (!response.ok || !body.ok) {
         setErrors(body.fieldErrors ?? {});
-        setFormError(body.error ?? 'Could not create your account.');
+        const message = body.error ?? 'Could not create your account.';
+        setFormError(message);
+        toast.error(message, { id: toastId });
         // The token was spent on this attempt whether it passed or not.
         // Leaving it in place would fail the retry as a duplicate.
         resetCaptcha();
@@ -128,11 +135,19 @@ export function RegisterForm() {
         body: JSON.stringify({ idToken }),
       });
 
+      toast.success('Account created', {
+        id: toastId,
+        description: `Welcome, ${form.firstName}. You are signed in as @${form.username}.`,
+        action: { label: 'Browse units', onClick: () => router.push('/units') },
+      });
+
       router.push('/projects');
       router.refresh();
     } catch {
       resetCaptcha();
-      setFormError('Could not create your account. Please try again.');
+      const message = 'Could not create your account. Please try again.';
+      setFormError(message);
+      toast.error(message, { id: toastId });
     } finally {
       setBusy(false);
     }

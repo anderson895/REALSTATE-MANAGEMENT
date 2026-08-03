@@ -4,3 +4,53 @@
 /* Tailwind v4 auto-detects sources next to this file; workspace packages need
    declaring explicitly or their classes get tree-shaken out. */
 @source '../../../packages/ui/src';
+
+/* --- toasts -------------------------------------------------------------
+ *
+ * Written as plain CSS rather than through sonner's `toastOptions.classNames`.
+ *
+ * A Tailwind utility is one class — specificity (0,1,0) — and so is sonner's
+ * own `[data-sonner-toast]`. When two rules tie, the winner is whichever the
+ * bundler happened to emit last, which is not something either file controls
+ * and not something a test would catch. `[data-sonner-toast][data-type='x']`
+ * is two attributes, (0,2,0), and wins outright.
+ *
+ * The look: white card, a 4px bar down the left in the state's colour, and the
+ * gold accent on the action button — the same gold as the reservation submit,
+ * because both are "the one thing to press here".
+ */
+
+[data-sonner-toast] {
+  border-left: 4px solid #d4d4d4; /* neutral-300, the neutral/loading state */
+}
+
+[data-sonner-toast][data-type='success'] {
+  border-left-color: var(--color-brand-600);
+}
+
+[data-sonner-toast][data-type='success'] [data-icon] {
+  color: var(--color-brand-600);
+}
+
+[data-sonner-toast][data-type='error'] {
+  border-left-color: #e11d48; /* rose-600 */
+}
+
+[data-sonner-toast][data-type='error'] [data-icon] {
+  color: #e11d48;
+}
+
+[data-sonner-toast] [data-title] {
+  font-weight: 600;
+}
+
+/* Gold, and legible on it — sonner's default button is pale grey on white. */
+[data-sonner-toast] [data-button] {
+  background-color: var(--color-accent-500);
+  color: #fff;
+  font-weight: 600;
+}
+
+[data-sonner-toast] [data-button]:hover {
+  background-color: var(--color-accent-400);
+}

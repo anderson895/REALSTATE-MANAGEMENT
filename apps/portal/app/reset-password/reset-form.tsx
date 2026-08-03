@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { sendPasswordResetEmail } from 'firebase/auth';
+import { toast } from 'sonner';
 import { getClientAuth } from '@sfsr/infrastructure';
 import { FormError, SubmitButton, TextField } from '@sfsr/ui';
 
@@ -26,6 +27,7 @@ export function ResetForm() {
     event.preventDefault();
     setError(null);
     setBusy(true);
+    const toastId = toast.loading('Sending your reset link…');
 
     try {
       await sendPasswordResetEmail(getClientAuth(), email.trim().toLowerCase());
@@ -34,11 +36,21 @@ export function ResetForm() {
       // auth/user-not-found is swallowed on purpose — see the note above.
       // Anything else is a real fault worth surfacing.
       if (code && code !== 'auth/user-not-found' && code !== 'auth/invalid-email') {
-        setError('Could not send the reset email. Please try again.');
+        const message = 'Could not send the reset email. Please try again.';
+        setError(message);
+        toast.error(message, { id: toastId });
         setBusy(false);
         return;
       }
     }
+
+    // Deliberately the same message whether or not the address is registered —
+    // the toast must not become the account-enumeration oracle the inline copy
+    // was carefully written to avoid.
+    toast.success('Check your email', {
+      id: toastId,
+      description: `If ${email.trim().toLowerCase()} is registered, a reset link is on its way.`,
+    });
 
     setSent(true);
     setBusy(false);

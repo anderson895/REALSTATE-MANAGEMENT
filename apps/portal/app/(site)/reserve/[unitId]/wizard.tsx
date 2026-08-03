@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import {
   DOWN_PAYMENT_TIERS,
   FINANCING_OPTIONS,
@@ -301,6 +302,8 @@ export function ReservationWizard({
     }
 
     setBusy(true);
+    const toastId = toast.loading('Submitting your reservation application…');
+
     try {
       const response = await fetch('/api/reservations', {
         method: 'POST',
@@ -314,14 +317,27 @@ export function ReservationWizard({
       };
 
       if (!response.ok || !body.ok) {
-        setFormError(body.error ?? 'Could not submit your reservation.');
+        const message = body.error ?? 'Could not submit your reservation.';
+        setFormError(message);
+        toast.error(message, { id: toastId });
         return;
       }
+
+      // Short, because the page this redirects to IS the confirmation — it
+      // carries the reference number, the status and the "this is not an
+      // approval" wording from RESERVATION.doc. Repeating all of that in a
+      // toast on top of it would say the same thing twice.
+      toast.success('Reservation submitted', {
+        id: toastId,
+        description: `Reference ${body.reservationNumber ?? '—'} · Unit ${unit.unitNo}`,
+      });
 
       localStorage.removeItem(storageKey);
       router.push(`/reserve/${unit.id}/submitted?ref=${body.reservationNumber}`);
     } catch {
-      setFormError('Could not submit your reservation. Please try again.');
+      const message = 'Could not submit your reservation. Please try again.';
+      setFormError(message);
+      toast.error(message, { id: toastId });
     } finally {
       setBusy(false);
     }
