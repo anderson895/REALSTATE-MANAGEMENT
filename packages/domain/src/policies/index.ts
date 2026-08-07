@@ -1,3 +1,4 @@
+export * from './otp';
 export {
   USERNAME_POLICY,
   PASSWORD_POLICY,

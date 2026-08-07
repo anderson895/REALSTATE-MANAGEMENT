@@ -14,6 +14,9 @@ export {
   getUnit,
   listAvailableParking,
   countUnitsByStatus,
+  countUnitsByProject,
+  UNIT_STATUSES,
+  type UnitStatusCounts,
   MAX_UNITS_PER_QUERY,
   type ProjectSummary,
   type ProjectStats,
@@ -21,3 +24,17 @@ export {
   type UnitFilters,
   type ParkingRow,
 } from './catalog.queries';
+
+export {
+  listReservationsByStatus,
+  countReservationsByStatus,
+  getReservation,
+  getReservationDetail,
+  MAX_RESERVATIONS_PER_QUERY,
+  type ReservationRow,
+  type ReservationBuyer,
+  type ReservationPayment,
+  type ReservationDocument,
+  type ReservationDetail,
+  type UploadedFileRef,
+} from './reservation.queries';

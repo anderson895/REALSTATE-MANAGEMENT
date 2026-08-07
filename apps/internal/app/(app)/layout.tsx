@@ -30,6 +30,10 @@ export default async function InternalLayout({ children }: { children: React.Rea
       subtitle="Internal Management System"
       sections={navigationFor(session.role)}
       currentPath={currentPath}
+      // An IT Administrator holds every module: nineteen items over five
+      // groups, long enough that the group being worked in scrolls out of
+      // sight. Only the group holding the current page starts open.
+      collapsibleSections
       footer={
         // Name first, then role, then the employee ID. Leading with "EMP012"
         // made the sidebar address a record rather than a person; the ID is

@@ -99,6 +99,19 @@ export function createUploadTicket(kind: AssetKind, ownerUid: string, slug: stri
   };
 }
 
+export interface SignedAssetOptions {
+  readonly expiresInSeconds?: number;
+  /**
+   * Deliver a downscaled preview at this width instead of the original.
+   *
+   * A phone photo of a government ID is 3–5 MB. A verification screen showing
+   * a receipt and both sides of an ID would pull ~12 MB per reservation opened
+   * if it linked the originals, on an office LAN, for images displayed a few
+   * hundred pixels wide. The full-size asset stays one click away.
+   */
+  readonly width?: number;
+}
+
 /**
  * A time-limited URL for an authenticated asset.
  *
@@ -106,13 +119,20 @@ export function createUploadTicket(kind: AssetKind, ownerUid: string, slug: stri
  * stops working when it expires, so a URL pasted into a chat or an email does
  * not become a permanent hole.
  */
-export function signedUrlFor(publicId: string, expiresInSeconds = 300): string {
+export function signedUrlFor(publicId: string, options: SignedAssetOptions = {}): string {
   configure();
+  const { expiresInSeconds = 300, width } = options;
+
   return cloudinary.url(publicId, {
     type: 'authenticated',
     sign_url: true,
     secure: true,
     expires_at: Math.round(Date.now() / 1000) + expiresInSeconds,
+    // Signed separately from the delivery URL, so the transformation cannot be
+    // edited in the address bar to fetch something else.
+    ...(width
+      ? { transformation: [{ width, crop: 'fit', fetch_format: 'auto', quality: 'auto' }] }
+      : {}),
   });
 }
 

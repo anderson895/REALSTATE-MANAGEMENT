@@ -73,6 +73,20 @@ export interface AppShellProps {
    * the first thing that should lose that argument.
    */
   readonly media?: ReactNode;
+  /**
+   * Collapse each titled section into a disclosure, open only when it holds
+   * the current page.
+   *
+   * For the Internal system, where an IT Administrator holds every module and
+   * the menu runs to nineteen items across five groups — long enough to scroll,
+   * which buries the group you are working in. The Portal's menu is short and
+   * collapsing a three-item list would only add a click, so this is opt-in.
+   *
+   * Uses `<details>`, so the open state is the browser's and costs no
+   * JavaScript. It resets on navigation, which is the point: the group holding
+   * the page you just opened is the one that unfolds.
+   */
+  readonly collapsibleSections?: boolean;
 }
 
 /**
@@ -97,6 +111,7 @@ export function AppShell({
   logo,
   topbar,
   media,
+  collapsibleSections = false,
 }: AppShellProps) {
   const s = SHELL_STYLES[variant];
 
@@ -150,11 +165,12 @@ export function AppShell({
               media ? 'shrink' : 'flex-1',
             )}
           >
-            {sections.map((section, i) => (
-              <div key={section.title ?? i} className={cn(i > 0 && 'mt-6')}>
-                {section.title ? (
-                  <p className={cn('px-2 pb-2 rail:hidden', s.sectionTitle)}>{section.title}</p>
-                ) : null}
+            {sections.map((section, i) => {
+              const holdsCurrent = section.items.some(
+                (item) => currentPath === item.href || currentPath.startsWith(`${item.href}/`),
+              );
+
+              const items = (
                 <ul className="space-y-0.5">
                   {section.items.map((item) => {
                     const active =
@@ -188,8 +204,43 @@ export function AppShell({
                     );
                   })}
                 </ul>
-              </div>
-            ))}
+              );
+
+              if (!collapsibleSections || !section.title) {
+                return (
+                  <div key={section.title ?? i} className={cn(i > 0 && 'mt-6')}>
+                    {section.title ? (
+                      <p className={cn('px-2 pb-2 rail:hidden', s.sectionTitle)}>{section.title}</p>
+                    ) : null}
+                    {items}
+                  </div>
+                );
+              }
+
+              return (
+                <details
+                  key={section.title}
+                  open={holdsCurrent}
+                  className={cn('group', i > 0 && 'mt-3')}
+                >
+                  <summary
+                    className={cn(
+                      'flex cursor-pointer list-none items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-black/5 dark:hover:bg-white/5 rail:hidden',
+                      s.sectionTitle,
+                    )}
+                  >
+                    <span>{section.title}</span>
+                    <span
+                      aria-hidden="true"
+                      className="text-[9px] leading-none transition-transform duration-150 group-open:rotate-90"
+                    >
+                      ▶
+                    </span>
+                  </summary>
+                  <div className="pt-1">{items}</div>
+                </details>
+              );
+            })}
           </nav>
 
           {/* Sits BELOW the scrolling nav, so a long menu never pushes it out

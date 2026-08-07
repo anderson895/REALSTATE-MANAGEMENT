@@ -21,12 +21,14 @@ import {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   let idToken: string;
+  let remember = false;
   try {
-    const body = (await request.json()) as { idToken?: unknown };
+    const body = (await request.json()) as { idToken?: unknown; remember?: unknown };
     if (typeof body.idToken !== 'string' || body.idToken.length === 0) {
       return NextResponse.json({ error: 'Missing ID token.' }, { status: 400 });
     }
     idToken = body.idToken;
+    remember = body.remember === true;
   } catch {
     return NextResponse.json({ error: 'Malformed request.' }, { status: 400 });
   }
@@ -62,7 +64,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     secure: process.env.NODE_ENV === 'production' && process.env.SFSR_LAN_HTTP !== 'true',
     sameSite: 'lax',
     path: '/',
-    maxAge: SESSION_MAX_AGE_SECONDS,
+    /**
+     * Omitting maxAge makes this a session cookie: it dies when the browser
+     * closes. That is the default here, and deliberately stricter than it was.
+     *
+     * These are shared office workstations on a LAN (Development Plan.md
+     * §5.7). Persisting every sign-in for five days meant a reservation could
+     * be approved under whoever last used that machine — an audit trail
+     * naming the wrong employee is worse than no shortcut at all.
+     *
+     * "Remember me" opts back in to the five days. The Firebase session cookie
+     * itself is still minted with that lifetime either way, so ticking the box
+     * extends nothing beyond what the token already allows.
+     */
+    ...(remember ? { maxAge: SESSION_MAX_AGE_SECONDS } : {}),
   });
 
   return response;

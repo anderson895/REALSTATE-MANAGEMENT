@@ -225,11 +225,64 @@ export async function listAvailableParking(
  * counting 150 units costs 1 — not 150.
  */
 export async function countUnitsByStatus(db: Firestore): Promise<Record<string, number>> {
-  const statuses = ['Available', 'On Hold', 'Sold'] as const;
   const counts = await Promise.all(
-    statuses.map((status) =>
+    UNIT_STATUSES.map((status) =>
       db.collection('units').where('status', '==', status).count().get(),
     ),
   );
-  return Object.fromEntries(statuses.map((s, i) => [s, counts[i]?.data().count ?? 0]));
+  return Object.fromEntries(UNIT_STATUSES.map((s, i) => [s, counts[i]?.data().count ?? 0]));
+}
+
+export const UNIT_STATUSES = ['Available', 'On Hold', 'Sold'] as const;
+export type UnitStatusCounts = Record<(typeof UNIT_STATUSES)[number], number>;
+
+/**
+ * Live unit counts, per project and status.
+ *
+ * ── Why not read the denormalised `stats` block ───────────────────────────
+ *
+ * Nothing in the reservation workflow maintains it. `scripts/seed/
+ * recompute-stats.ts` is the only writer, so the moment Account Receivables
+ * verifies a payment the unit moves to On Hold and every project's `stats`
+ * becomes wrong until someone re-runs the script.
+ *
+ * That is tolerable on the browse pages, where a stale "30 available" badge
+ * costs a buyer nothing and the authoritative check happens inside the
+ * reservation transaction anyway. It is not tolerable on a screen whose entire
+ * job is to report the current position.
+ *
+ * COST: 3 count() aggregations per project. count() bills one read per 1,000
+ * index entries scanned, so five projects cost 15 reads rather than the 150 a
+ * fetch-and-tally would. Served by the existing (projectId, status, …)
+ * composite index on its equality prefix.
+ */
+export async function countUnitsByProject(
+  db: Firestore,
+  projectIds: readonly string[],
+): Promise<Record<string, UnitStatusCounts>> {
+  const pairs = projectIds.flatMap((projectId) =>
+    UNIT_STATUSES.map((status) => ({ projectId, status })),
+  );
+
+  const results = await Promise.all(
+    pairs.map(({ projectId, status }) =>
+      db
+        .collection('units')
+        .where('projectId', '==', projectId)
+        .where('status', '==', status)
+        .count()
+        .get(),
+    ),
+  );
+
+  const byProject: Record<string, UnitStatusCounts> = {};
+  for (const projectId of projectIds) {
+    byProject[projectId] = { Available: 0, 'On Hold': 0, Sold: 0 };
+  }
+  pairs.forEach(({ projectId, status }, index) => {
+    const bucket = byProject[projectId];
+    if (bucket) bucket[status] = results[index]?.data().count ?? 0;
+  });
+
+  return byProject;
 }

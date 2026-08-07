@@ -25,7 +25,24 @@ export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   readonly label: string;
   readonly hint?: string;
   readonly error?: string;
+  /** Beside the label, above the field — e.g. a "Forgot password?" link. */
   readonly trailing?: ReactNode;
+  /** Decorative icon inside the field, on the left. Never focusable. */
+  readonly leading?: ReactNode;
+  /**
+   * Interactive control inside the field, on the right — a show/hide toggle,
+   * a clear button. Distinct from `trailing`, which sits outside the box and
+   * is read as part of the label rather than as part of the input.
+   */
+  readonly inlineAction?: ReactNode;
+  /**
+   * Show the red asterisk on a required field. On by default.
+   *
+   * Turned off where EVERY field in the form is required — the sign-in screen,
+   * for one. A marker that appears on all of them distinguishes nothing and
+   * only adds punctuation to the label.
+   */
+  readonly showRequiredMarker?: boolean;
 }
 
 export function TextField({
@@ -33,6 +50,9 @@ export function TextField({
   hint,
   error,
   trailing,
+  leading,
+  inlineAction,
+  showRequiredMarker = true,
   id,
   className,
   ...props
@@ -44,18 +64,43 @@ export function TextField({
       <div className="flex items-baseline justify-between gap-2">
         <label htmlFor={inputId} className="block text-sm font-medium">
           {label}
-          {props.required ? <span className="ml-0.5 text-rose-500">*</span> : null}
+          {props.required && showRequiredMarker ? (
+            <span className="ml-0.5 text-rose-500">*</span>
+          ) : null}
         </label>
         {trailing}
       </div>
 
-      <input
-        id={inputId}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
-        className={cn(fieldClass, 'mt-1.5', error && 'border-rose-400 focus:border-rose-500', className)}
-        {...props}
-      />
+      <div className="relative mt-1.5">
+        {leading ? (
+          // pointer-events-none so a click on the icon still focuses the input
+          // rather than landing on a dead span beside it.
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 flex -translate-y-1/2 text-neutral-400"
+          >
+            {leading}
+          </span>
+        ) : null}
+
+        <input
+          id={inputId}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
+          className={cn(
+            fieldClass,
+            leading && 'pl-10',
+            inlineAction && 'pr-10',
+            error && 'border-rose-400 focus:border-rose-500',
+            className,
+          )}
+          {...props}
+        />
+
+        {inlineAction ? (
+          <span className="absolute right-2 top-1/2 flex -translate-y-1/2">{inlineAction}</span>
+        ) : null}
+      </div>
 
       {hint && !error ? (
         <p id={`${inputId}-hint`} className="mt-1 text-xs text-neutral-500">

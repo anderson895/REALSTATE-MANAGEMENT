@@ -192,6 +192,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /passwordResetCodes/{email} {
+      // Hashed one-time passcodes. Sealed from the browser entirely.
+      //
+      // Readable would be an account-enumeration index keyed BY EMAIL — the
+      // document id alone tells you the address exists — on top of handing
+      // over the hashes. Writable would let anyone mint their own reset.
+      // Only the Admin SDK touches this, from /api/auth/forgot-password and
+      // /api/auth/verify-otp.
+      allow read, write: if false;
+    }
+
     match /counters/{counterId} {
       allow read, write: if false;
     }

@@ -62,6 +62,33 @@ export function getServerConfig() {
       apiKey: required('CLOUDINARY_API_KEY', process.env.CLOUDINARY_API_KEY),
       apiSecret: required('CLOUDINARY_API_SECRET', process.env.CLOUDINARY_API_SECRET),
     },
+    mail: {
+      /*
+       * Gmail SMTP, not Firebase's built-in reset email.
+       *
+       * Firebase sends a fixed template nobody can brand. Owning the send
+       * means owning the wording, the logo and the tone — which for a company
+       * asking people to part with ₱50,000 is not decoration.
+       *
+       * `GMAIL_APP_PASSWORD` is an App Password from a Google account with
+       * 2-Step Verification enabled. The account password will not work.
+       */
+      /*
+       * NOT `required()`, deliberately.
+       *
+       * `getServerConfig()` is read by every Firestore and Cloudinary call in
+       * both apps. Demanding SMTP credentials here made a missing
+       * GMAIL_USER take down unit browsing, project pages and the reservation
+       * flow — none of which send email. The check belongs where the credential
+       * is USED, so a mail misconfiguration breaks mail and nothing else.
+       *
+       * `getMailTransport()` validates these before its first send.
+       */
+      user: process.env.GMAIL_USER ?? '',
+      appPassword: process.env.GMAIL_APP_PASSWORD ?? '',
+      /** Display name on the From: header. */
+      fromName: process.env.MAIL_FROM_NAME ?? 'St. Francis Square Realty',
+    },
     vision: {
       projectId: process.env.GOOGLE_CLOUD_PROJECT_ID ?? publicConfig.firebase.projectId,
       credentialsPath: process.env.GOOGLE_APPLICATION_CREDENTIALS ?? '',

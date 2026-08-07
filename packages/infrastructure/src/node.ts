@@ -26,12 +26,26 @@ export {
   getUnit,
   listAvailableParking,
   countUnitsByStatus,
+  countUnitsByProject,
+  UNIT_STATUSES,
+  type UnitStatusCounts,
   MAX_UNITS_PER_QUERY,
   type ProjectSummary,
   type ProjectStats,
   type UnitRow,
   type UnitFilters,
   type ParkingRow,
+  listReservationsByStatus,
+  countReservationsByStatus,
+  getReservation,
+  getReservationDetail,
+  MAX_RESERVATIONS_PER_QUERY,
+  type ReservationRow,
+  type ReservationBuyer,
+  type ReservationPayment,
+  type ReservationDocument,
+  type ReservationDetail,
+  type UploadedFileRef,
 } from './firestore';
 
 export {
@@ -42,6 +56,7 @@ export {
   MAX_UPLOAD_BYTES,
   type AssetKind,
   type UploadTicket,
+  type SignedAssetOptions,
 } from './cloudinary/storage';
 
 export {
@@ -66,3 +81,5 @@ export {
   type EmployeeSession,
   type ClientSession,
 } from './auth';
+
+export { sendMail, otpEmail, getMailTransport, type MailMessage } from './mail';

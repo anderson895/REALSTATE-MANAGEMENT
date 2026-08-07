@@ -22,8 +22,11 @@ interface ModuleRoute {
 }
 
 const ROUTES: readonly ModuleRoute[] = [
+  // ANALYTICS has no row of its own: the charts live on the dashboard, shown
+  // to whoever holds the grant. Both modules are granted to exactly the same
+  // two roles in the matrix, so nobody loses a link they used to have — and
+  // `/` is the landing page regardless of grants.
   { module: 'DASHBOARD', href: '/', label: 'Dashboard', group: 'Overview' },
-  { module: 'ANALYTICS', href: '/analytics', label: 'Analytics', group: 'Overview' },
 
   { module: 'UNIT_INVENTORY', href: '/inventory', label: 'Unit Inventory', group: 'Sales' },
   { module: 'SCHEDULING', href: '/scheduling', label: 'Tripping Schedule', group: 'Sales' },

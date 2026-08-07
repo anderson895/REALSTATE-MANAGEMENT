@@ -22,7 +22,11 @@
     "fastest-levenshtein": "^1.0.16",
     "firebase": "^12.17.0",
     "firebase-admin": "^14.2.0",
+    "nodemailer": "^9.0.3",
     "server-only": "^0.0.1"
   },
-  "comment": "'.' is client-safe. '/server' pulls in firebase-admin and must never reach a browser bundle."
+  "comment": "'.' is client-safe. '/server' pulls in firebase-admin and must never reach a browser bundle.",
+  "devDependencies": {
+    "@types/nodemailer": "^8.0.1"
+  }
 }
