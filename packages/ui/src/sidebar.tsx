@@ -162,14 +162,14 @@ export function AppShell({
           <nav
             className={cn(
               'min-h-0 overflow-y-auto px-3 py-4',
+              // Only the dark skins get the slim treatment: on the `light`
+              // sidebar the native scrollbar already sits on a pale surface
+              // and looks like it belongs.
+              variant === 'light' ? undefined : 'scrollbar-slim',
               media ? 'shrink' : 'flex-1',
             )}
           >
             {sections.map((section, i) => {
-              const holdsCurrent = section.items.some(
-                (item) => currentPath === item.href || currentPath.startsWith(`${item.href}/`),
-              );
-
               const items = (
                 <ul className="space-y-0.5">
                   {section.items.map((item) => {
@@ -217,27 +217,71 @@ export function AppShell({
                 );
               }
 
+              /*
+               * A group of ONE is not a group.
+               *
+               * The sheet puts "Dashboard" at the top of every menu as a plain
+               * row — no heading above it and nothing to open, because there is
+               * nothing inside it but itself. Wrapping a lone link in a
+               * disclosure adds a click to reach it and a heading that repeats
+               * its own label.
+               */
+              if (section.items.length === 1) {
+                return (
+                  <div key={section.title} className={cn(i > 0 && 'mt-1')}>
+                    {items}
+                  </div>
+                );
+              }
+
               return (
                 <details
                   key={section.title}
-                  open={holdsCurrent}
-                  className={cn('group', i > 0 && 'mt-3')}
+                  /*
+                   * Every group starts OPEN, not just the one holding the
+                   * current page.
+                   *
+                   * Opening only the current group meant a Documentation Staff
+                   * landing on `/` saw a sidebar with one shut group and no
+                   * visible link — the menu looked empty and the work was one
+                   * unprompted click away. Showing everything costs a little
+                   * height and hides nothing; a group can still be collapsed
+                   * by hand, and `holdsCurrent` no longer has to be right for
+                   * the menu to be usable.
+                   */
+                  open
+                  className={cn('group', i > 0 && 'mt-1')}
                 >
+                  {/*
+                   * The toggle is a NAV ROW, not a heading.
+                   *
+                   * It carries the same icon, height, padding and type size as
+                   * the links beneath it, with the chevron on the right — which
+                   * is how the sheet draws it. It used to be a 11px uppercase
+                   * micro-label with a tiny arrow, and it read as a caption
+                   * rather than as something you could press.
+                   */}
                   <summary
                     className={cn(
-                      'flex cursor-pointer list-none items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-black/5 dark:hover:bg-white/5 rail:hidden',
-                      s.sectionTitle,
+                      'flex cursor-pointer list-none items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors',
+                      'rail:justify-center rail:px-0',
+                      s.sectionToggle ?? s.item,
                     )}
                   >
-                    <span>{section.title}</span>
-                    <span
-                      aria-hidden="true"
-                      className="text-[9px] leading-none transition-transform duration-150 group-open:rotate-90"
-                    >
-                      ▶
-                    </span>
+                    {section.icon ? <span className="shrink-0">{section.icon}</span> : null}
+                    <span className="flex-1 truncate rail:hidden">{section.title}</span>
+                    <Chevron />
                   </summary>
-                  <div className="pt-1">{items}</div>
+                  {/*
+                   * Children are indented and hang off a rule down the left, so
+                   * a nested link is visibly inside its parent rather than just
+                   * further along the list — the sheet marks them the same way.
+                   */}
+                  <div
+                    className={cn('mt-0.5 pl-4 rail:pl-0', s.subtree)}
+                  >
+                    {items}
+                  </div>
                 </details>
               );
             })}
@@ -276,6 +320,30 @@ export function AppShell({
         </main>
       </div>
     </div>
+  );
+}
+
+/**
+ * Disclosure chevron for a collapsible group.
+ *
+ * Points right when shut and down when open, driven by `group-open` on the
+ * `<details>` — so the state is the browser's and costs no JavaScript, the same
+ * reason the disclosure itself is a `<details>`.
+ */
+function Chevron() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-3.5 w-3.5 shrink-0 opacity-70 transition-transform duration-150 group-open:rotate-90 rail:hidden"
+    >
+      <path d="m9 6 6 6-6 6" />
+    </svg>
   );
 }
 

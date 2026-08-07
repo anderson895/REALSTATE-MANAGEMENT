@@ -38,3 +38,24 @@ export {
   type ReservationDetail,
   type UploadedFileRef,
 } from './reservation.queries';
+
+export {
+  listTrippings,
+  MAX_TRIPPINGS_PER_QUERY,
+  TRIPPING_STATUSES,
+  type TrippingRow,
+  type TrippingStatus,
+} from './tripping.queries';
+
+export {
+  listDocumentQueue,
+  getClientMasterfile,
+  searchClients,
+  countClients,
+  countDocumentQueue,
+  countReservationsByStatusAndProject,
+  MAX_DOCUMENT_QUEUE,
+  type DocumentQueueRow,
+  type ClientMasterfileRow,
+  type StatusByProject,
+} from './documentation.queries';

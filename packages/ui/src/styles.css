@@ -78,6 +78,58 @@
   --color-accent-800: #63400f;
   --color-accent-900: #4a300b;
 
+  /*
+   * Navy and gold — the Internal Management System's identity.
+   *
+   * A SECOND palette in this file, alongside the green above, and deliberately
+   * so: INTERNAL.xls sheet `USER INTERFACE` draws every internal screen navy,
+   * while the buyer portal stays deep green. Two surfaces, two identities, one
+   * stylesheet — because `AppShell` is shared and its navy skin has to resolve
+   * in whichever app compiles it.
+   *
+   * The Portal never spends these. Tailwind v4 emits only the tokens a build
+   * actually uses, so carrying them here costs the Portal nothing.
+   *
+   * Hex and MATCHED, the same rule the brand green is held to — every anchor is
+   * sampled from the client's artwork and the stop it sits on is noted. Navy
+   * gets darker as the number climbs, as Tailwind ramps do.
+   */
+  --color-navy-50: #eff3fa;
+  --color-navy-100: #dbe4f3;
+  --color-navy-200: #b8c9e6;
+  --color-navy-300: #8aa5d2;
+  --color-navy-400: #5578b4;
+  --color-navy-500: #2f5395;
+  --color-navy-600: #1d3d78;
+  --color-navy-700: #12294f; /* login card heading */
+  --color-navy-800: #001e51; /* sidebar body — the anchor */
+  --color-navy-900: #08183a; /* login backdrop */
+  --color-navy-950: #04102a;
+
+  /*
+   * Gold — the one warm accent on navy. Spent only on the current menu item,
+   * the rule under a page title, and the single most important action on a
+   * screen.
+   *
+   * A separate ramp from `--color-accent-*` rather than a reuse of it. The two
+   * are close enough to be mistaken for each other and are not the same
+   * colour: accent is the gold that sits on the Portal's GREEN sidebar, this
+   * is the gold that sits on NAVY, and each was sampled from its own artwork.
+   * Rounding one onto the other is how a brand colour stops being one.
+   *
+   * 200/300/400 are the three stops of the active-item gradient, left to right.
+   */
+  --color-gold-50: #fdf7e7;
+  --color-gold-100: #f9ecc5;
+  --color-gold-200: #f7e2a0; /* active pill, gradient start */
+  --color-gold-300: #f0cb77; /* active pill, gradient end */
+  --color-gold-400: #edc16a; /* active pill, midpoint — the anchor */
+  --color-gold-500: #d8b955; /* login rule */
+  --color-gold-600: #c9a227; /* login sweep, divider */
+  --color-gold-700: #b8942a; /* login sweep, dark end */
+  --color-gold-800: #8f7220;
+  --color-gold-900: #665117;
+
   /* Page background behind the cards. Slightly cooler than neutral-50, which
      is what stops a white card from disappearing into the page. */
   --color-canvas: #f7f8fa;
@@ -104,6 +156,49 @@
 
   &::-webkit-scrollbar {
     display: none;
+  }
+}
+
+/**
+ * Slim, self-effacing scrollbar for DARK panels.
+ *
+ * The sidebar menu scrolls once a role holds enough modules to overflow — an
+ * IT Administrator has nineteen items over five groups — and Windows draws
+ * that with a full-width light-grey trough. On a navy panel it reads as a
+ * structural column down the edge of the menu rather than as a scrollbar.
+ *
+ * White at low opacity, not `currentColor`: the nav element inherits its text
+ * colour from the page shell (near-black), so `currentColor` would paint a
+ * dark thumb on a dark panel and disappear. The value is hard-coded to the
+ * only kind of surface this is used on, which is what the name says.
+ *
+ * `scrollbar-width`/`scrollbar-color` is the standard property, honoured by
+ * Firefox; the `::-webkit-` rules cover Chromium and Safari. Both are needed —
+ * neither is universal.
+ *
+ * The trough is transparent so nothing is visible until there is something to
+ * scroll, and the thumb brightens on hover so it can still be grabbed.
+ */
+@utility scrollbar-slim {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.22) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: rgb(255 255 255 / 0.22);
+    border-radius: 9999px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(255 255 255 / 0.4);
   }
 }
 

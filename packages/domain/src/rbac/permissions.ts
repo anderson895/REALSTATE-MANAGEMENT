@@ -27,10 +27,30 @@ const MATRIX: Record<InternalRole, ModuleGrants> = {
   // "Full system administration ... Full Access to All Modules"
   IT_ADMINISTRATOR: Object.fromEntries(MODULES.map((m) => [m, FULL])) as ModuleGrants,
 
-  // "view unit inventory and tripping request from client" — view & print
+  /**
+   * The one place the two source documents contradict each other.
+   *
+   * RBAC.xls, sheet USER ROLE ACCESS row 7: "Sales Agent, Broker & Group Head
+   * … view unit inventory and tripping request from client … view & print".
+   * Read literally that makes Sales purely passive.
+   *
+   * INTERNAL.xls, sheet WEB PORTAL TO INTERNAL item 1, gives the same role an
+   * action: "ACCEPT/CONFIRM TRIPPING REQUEST (FIRST SALES AGENT TO ACCEPT)",
+   * with the approver column marked N/A — nobody signs it off, the first agent
+   * to claim it takes it. A role that cannot modify a tripping cannot accept
+   * one, so INTERNAL.xls governs and scheduling carries `modify`.
+   *
+   * NOT `create` and NOT `delete`, deliberately: the buyer raises the request
+   * from the Portal, and firestore.rules refuses deletes on trippings
+   * outright. Unit inventory stays view & print — nothing in INTERNAL.xls asks
+   * Sales to change stock.
+   *
+   * Mirrored by `allow update` on /trippings in firestore.rules. Change one
+   * and the other has to move with it.
+   */
   SALES: {
     UNIT_INVENTORY: READ_PRINT,
-    SCHEDULING: READ_PRINT,
+    SCHEDULING: ['view', 'print', 'modify'],
   },
 
   // "In charge in client masterfile (add, delete & update) ... OCR ..."

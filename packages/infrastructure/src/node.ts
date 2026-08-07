@@ -46,6 +46,21 @@ export {
   type ReservationDocument,
   type ReservationDetail,
   type UploadedFileRef,
+  listTrippings,
+  MAX_TRIPPINGS_PER_QUERY,
+  TRIPPING_STATUSES,
+  type TrippingRow,
+  type TrippingStatus,
+  listDocumentQueue,
+  getClientMasterfile,
+  searchClients,
+  countClients,
+  countDocumentQueue,
+  countReservationsByStatusAndProject,
+  MAX_DOCUMENT_QUEUE,
+  type DocumentQueueRow,
+  type ClientMasterfileRow,
+  type StatusByProject,
 } from './firestore';
 
 export {

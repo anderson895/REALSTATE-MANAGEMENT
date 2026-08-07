@@ -41,7 +41,7 @@ export default async function ApprovalsPage({
       />
 
       {!session.isSupervisor ? (
-        <p className="mt-6 rounded-md bg-neutral-100 px-4 py-3 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
+        <p className="mt-6 rounded-md bg-neutral-100 px-4 py-3 text-xs text-neutral-600">
           You can monitor this queue but not approve from it. Approval is granted by the supervisor
           flag on your employee record, not by your role.
         </p>

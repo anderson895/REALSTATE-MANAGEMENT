@@ -40,11 +40,24 @@ describe('can — grants transcribed from USER ROLE ACCESS', () => {
     }
   });
 
-  it('limits Sales to viewing and printing inventory and scheduling', () => {
+  it('lets Sales act on scheduling but only look at inventory', () => {
     expect(can(staff('SALES'), 'UNIT_INVENTORY', 'view')).toBe(true);
     expect(can(staff('SALES'), 'UNIT_INVENTORY', 'print')).toBe(true);
     expect(can(staff('SALES'), 'UNIT_INVENTORY', 'modify')).toBe(false);
+
     expect(can(staff('SALES'), 'SCHEDULING', 'view')).toBe(true);
+    expect(can(staff('SALES'), 'SCHEDULING', 'print')).toBe(true);
+    // INTERNAL.xls: "ACCEPT/CONFIRM TRIPPING REQUEST (FIRST SALES AGENT TO
+    // ACCEPT)". Accepting is a write, so this has to be true even though the
+    // RBAC.xls row says "view & print".
+    expect(can(staff('SALES'), 'SCHEDULING', 'modify')).toBe(true);
+  });
+
+  it('does not let Sales raise or destroy a tripping request', () => {
+    // The buyer creates it from the Portal and firestore.rules refuses every
+    // delete. Accepting is the only thing Sales does to the record.
+    expect(can(staff('SALES'), 'SCHEDULING', 'create')).toBe(false);
+    expect(can(staff('SALES'), 'SCHEDULING', 'delete')).toBe(false);
   });
 
   it('gives Legal Counsel read-only on client profiles and nothing else', () => {

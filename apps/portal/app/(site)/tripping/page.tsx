@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { Timestamp } from 'firebase-admin/firestore';
+import { trippingReference } from '@sfsr/domain';
 import { getAdminFirestore } from '@sfsr/infrastructure/server';
 import { Card, EmptyState, PageHeader } from '@sfsr/ui';
 import { requireCapability } from '@/lib/session';
@@ -46,21 +48,46 @@ export default async function TrippingPage() {
           <ul className="divide-y divide-neutral-100 dark:divide-neutral-800">
             {existing.docs.map((doc) => {
               const data = doc.data();
+              // The same helper the Sales Agent's queue renders from, so the
+              // reference the buyer reads out is character-for-character the
+              // one the agent searches for.
+              const reference = trippingReference(
+                doc.id,
+                data.requestedAt instanceof Timestamp ? data.requestedAt.toDate() : null,
+              );
               return (
                 <li key={doc.id} className="flex items-center justify-between gap-4 px-5 py-3">
-                  <div>
-                    <p className="text-sm font-medium">{String(data.projectName ?? data.projectId)}</p>
+                  <div className="min-w-0">
+                    {/*
+                     * Above the project name, not beside it. This is what the
+                     * buyer quotes when they ring up about the visit, so it
+                     * has to be the first thing found on the row rather than
+                     * something recovered from the end of a line.
+                     */}
+                    <p className="tabular text-[11px] font-semibold tracking-wide text-brand-700 dark:text-brand-400">
+                      {reference}
+                    </p>
+                    <p className="mt-0.5 text-sm font-medium">
+                      {String(data.projectName ?? data.projectId)}
+                    </p>
                     <p className="text-xs text-neutral-500">
                       Preferred: {String(data.preferredDate ?? '—')}
                     </p>
                   </div>
-                  <span className="text-xs text-neutral-500">{String(data.status ?? 'Requested')}</span>
+                  <span className="shrink-0 text-xs text-neutral-500">
+                    {String(data.status ?? 'Requested')}
+                  </span>
                 </li>
               );
             })}
           </ul>
         </Card>
       )}
+
+      <p className="mt-4 text-xs leading-relaxed text-neutral-500">
+        Quote the reference above when you follow up about a viewing — it is how your sales agent
+        finds the request.
+      </p>
     </div>
   );
 }

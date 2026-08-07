@@ -71,6 +71,58 @@ export class SalesStaffId extends Identifier {
 }
 
 /**
+ * Quotable reference for a tripping request, format `TR-YYYYMMDD-XXXX`.
+ *
+ * ── Why this is derived rather than stored ────────────────────────────────
+ *
+ * INTERNAL.xls sheet `USER INTERFACE` shows the Sales Agent's queue with a
+ * REQUEST ID column reading `TR-2025-0518-001`. There is no counter behind
+ * that: the Portal creates trippings with `.add()`, so the only identifier a
+ * request has is a 20-character Firestore id nobody is going to read down a
+ * phone. Allocating a real sequence would mean a counter document and a
+ * transaction on every request, to number something that is never used as a
+ * key. This composes the date the request was raised with a short slice of
+ * that id instead — stable, free, and close enough to the sheet's shape to be
+ * recognised.
+ *
+ * ── Why it lives in the domain and not in either app ──────────────────────
+ *
+ * BOTH surfaces show it: the buyer sees it on the Portal as proof the request
+ * is theirs, and the agent sees it on the Internal queue. It is the string the
+ * two of them say to each other, so there cannot be two implementations of it.
+ * A copy in each app that drifts by one character is a buyer reading out a
+ * reference the agent cannot find.
+ *
+ * DISPLAY ONLY. Every write still addresses the real document id, so a
+ * collision here could confuse a conversation but cannot mis-address an
+ * update. Four uppercased base-62 characters give roughly 14 million
+ * combinations against the handful of requests raised on any one day, which is
+ * the only window in which two references are ever seen side by side.
+ */
+export function trippingReference(
+  id: string,
+  /** Firestore hands this back as a Timestamp; the query layer as an ISO string. */
+  requestedAt: Date | string | null | undefined,
+): string {
+  const suffix = id.trim().slice(0, 4).toUpperCase();
+  const day = requestedDay(requestedAt);
+  return day ? `TR-${day}-${suffix}` : `TR-${suffix}`;
+}
+
+/** `YYYYMMDD` in UTC, or null when the timestamp has not landed yet. */
+function requestedDay(value: Date | string | null | undefined): string | null {
+  if (value == null) return null;
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  // UTC, deliberately. The reference is quoted between a buyer and an agent
+  // who may be reading it off two machines in different zones, and a reference
+  // that changes depending on where it is rendered is not one.
+  return date.toISOString().slice(0, 10).replace(/-/g, '');
+}
+
+/**
  * Reservation reference number, format `RES-YYYY-NNNNNN`.
  *
  * The sample in RESERVATION.doc is `RES-2026-000001`. The sequence is

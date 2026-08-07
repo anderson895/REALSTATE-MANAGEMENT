@@ -98,10 +98,10 @@ export default async function ReservationDetailPage({
       </Card>
 
       {reservation.status === 'DeficiencyNoted' ? (
-        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/50 dark:text-amber-200">
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
           <p className="font-medium">Deficiency noted — waiting on the buyer</p>
           <p className="mt-1">{reservation.deficiencyReason}</p>
-          <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+          <p className="mt-2 text-xs text-amber-700">
             They have until {formatDate(reservation.deficiencyDueAt)} to respond. After that the
             reservation can be moved to the Expired Reservation Report.
           </p>
@@ -120,12 +120,12 @@ export default async function ReservationDetailPage({
                   </p>
                   <span className="text-xs text-neutral-500">{payment.status}</span>
                 </div>
-                <dl className="grid grid-cols-2 gap-x-6 border-t border-neutral-200 px-5 py-3 dark:border-neutral-800 sm:grid-cols-3">
+                <dl className="grid grid-cols-2 gap-x-6 border-t border-neutral-200 px-5 py-3 sm:grid-cols-3">
                   <Compact label="Reference">{payment.referenceNumber}</Compact>
                   <Compact label="Channel">{payment.channel}</Compact>
                   <Compact label="Paid on">{formatDate(payment.paymentDate)}</Compact>
                 </dl>
-                <div className="border-t border-neutral-200 px-5 py-4 dark:border-neutral-800">
+                <div className="border-t border-neutral-200 px-5 py-4">
                   <AssetPreview file={payment.receipt} label="Receipt" />
                 </div>
               </>
@@ -138,7 +138,7 @@ export default async function ReservationDetailPage({
             {documents.length === 0 ? (
               <p className="px-5 py-4 text-sm text-neutral-500">Nothing uploaded yet.</p>
             ) : (
-              <div className="divide-y divide-neutral-200 dark:divide-neutral-800">
+              <div className="divide-y divide-neutral-200">
                 {documents.map((doc, index) => (
                   <div key={index} className="px-5 py-4">
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -180,12 +180,14 @@ export default async function ReservationDetailPage({
                 <p>
                   {reservation.status === 'Approved'
                     ? 'Approved. The unit has left inventory and is now marked Sold.'
-                    : `Nothing for ${session.displayName.split(' ')[0]} to do at this stage.`}
+                    : // split(' '), not split('') — the empty separator splits
+                      // into CHARACTERS, so this addressed "Joanna Flores" as "J".
+                      `Nothing for ${session.displayName.split(' ')[0]} to do at this stage.`}
                 </p>
                 {waitingFor ? (
                   <p className="mt-2">
                     Waiting on{' '}
-                    <span className="font-medium text-neutral-700 dark:text-neutral-300">
+                    <span className="font-medium text-neutral-700">
                       {waitingFor}
                     </span>
                     .
@@ -201,7 +203,7 @@ export default async function ReservationDetailPage({
                 {primary.length === 0 && waitingFor ? (
                   <p className="text-sm text-neutral-500">
                     Verified on your side. Now with{' '}
-                    <span className="font-medium text-neutral-700 dark:text-neutral-300">
+                    <span className="font-medium text-neutral-700">
                       {waitingFor}
                     </span>
                     .
@@ -228,11 +230,11 @@ export default async function ReservationDetailPage({
                   <details
                     className={
                       primary.length > 0
-                        ? 'group border-t border-neutral-200 pt-3 dark:border-neutral-800'
+                        ? 'group border-t border-neutral-200 pt-3'
                         : 'group'
                     }
                   >
-                    <summary className="cursor-pointer list-none text-sm text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100">
+                    <summary className="cursor-pointer list-none text-sm text-neutral-600 hover:text-neutral-900">
                       <span className="group-open:hidden">▸ Something is wrong with this</span>
                       <span className="hidden group-open:inline">▾ Note a deficiency</span>
                     </summary>
@@ -248,11 +250,11 @@ export default async function ReservationDetailPage({
                         rows={3}
                         required
                         placeholder="e.g. Back of the government ID is unreadable."
-                        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-950"
+                        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                       />
                       <button
                         type="submit"
-                        className="w-full rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900 transition-colors hover:bg-amber-100 dark:border-amber-900/50 dark:bg-amber-950/50 dark:text-amber-200 dark:hover:bg-amber-900/40"
+                        className="w-full rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900 transition-colors hover:bg-amber-100"
                       >
                         {ACTION_LABELS.noteDeficiency}
                       </button>
@@ -286,7 +288,7 @@ export default async function ReservationDetailPage({
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Card>
-      <h2 className="border-b border-neutral-200 px-5 py-3 text-sm font-medium dark:border-neutral-800">
+      <h2 className="border-b border-neutral-200 px-5 py-3 text-sm font-medium">
         {title}
       </h2>
       {children}
@@ -315,7 +317,7 @@ function Compact({ label, children }: { label: string; children: ReactNode }) {
 function AssetPreview({ file, label }: { file: UploadedFileRef | null; label: string }) {
   if (!file) {
     return (
-      <div className="rounded-md border border-dashed border-neutral-300 px-4 py-6 text-center text-xs text-neutral-400 dark:border-neutral-700">
+      <div className="rounded-md border border-dashed border-neutral-300 px-4 py-6 text-center text-xs text-neutral-400">
         {label} — not uploaded
       </div>
     );
@@ -327,12 +329,12 @@ function AssetPreview({ file, label }: { file: UploadedFileRef | null; label: st
   return (
     <figure className="min-w-0">
       <figcaption className="mb-1.5 flex items-baseline justify-between gap-2">
-        <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">{label}</span>
+        <span className="text-xs font-medium text-neutral-600">{label}</span>
         <a
           href={full}
           target="_blank"
           rel="noreferrer"
-          className="shrink-0 text-xs text-brand-700 hover:underline dark:text-brand-400"
+          className="shrink-0 text-xs text-brand-700 hover:underline"
         >
           Full size ↗
         </a>
@@ -346,7 +348,7 @@ function AssetPreview({ file, label }: { file: UploadedFileRef | null; label: st
           <img
             src={signedUrlFor(file.publicId, { width: 640 })}
             alt={`${label} — ${file.fileName}`}
-            className="max-h-64 w-full rounded-md border border-neutral-200 bg-neutral-50 object-contain dark:border-neutral-800 dark:bg-neutral-950"
+            className="max-h-64 w-full rounded-md border border-neutral-200 bg-neutral-50 object-contain"
           />
         </a>
       ) : (
@@ -354,7 +356,7 @@ function AssetPreview({ file, label }: { file: UploadedFileRef | null; label: st
           href={full}
           target="_blank"
           rel="noreferrer"
-          className="block rounded-md border border-neutral-200 px-4 py-6 text-center text-xs text-brand-700 hover:underline dark:border-neutral-800 dark:text-brand-400"
+          className="block rounded-md border border-neutral-200 px-4 py-6 text-center text-xs text-brand-700 hover:underline"
         >
           {file.fileName}
         </a>

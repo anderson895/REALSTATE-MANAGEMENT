@@ -73,24 +73,24 @@ export function QueueTable({
             <th className="px-5 py-2.5 text-right font-medium">Action</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+        <tbody className="divide-y divide-neutral-100">
           {rows.map((row) => {
             const age = daysWaiting(row.reservedAt);
             const next = quickAction(row, actor);
             return (
               <tr
                 key={row.number}
-                className="align-top transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
+                className="align-top transition-colors hover:bg-neutral-50"
               >
                 <td className="px-5 py-3">
                   <Link
                     href={`/reservations/${row.number}`}
-                    className="font-medium text-brand-700 hover:underline dark:text-brand-400"
+                    className="font-medium text-brand-700 hover:underline"
                   >
                     {row.number}
                   </Link>
                   {row.deficiencyReason ? (
-                    <p className="mt-1 max-w-md text-xs text-amber-700 dark:text-amber-400">
+                    <p className="mt-1 max-w-md text-xs text-amber-700">
                       Deficiency: {row.deficiencyReason}
                     </p>
                   ) : null}
@@ -120,7 +120,7 @@ export function QueueTable({
                     ) : null}
                     <Link
                       href={`/reservations/${row.number}`}
-                      className="whitespace-nowrap rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                      className="whitespace-nowrap rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-100"
                     >
                       Review
                     </Link>

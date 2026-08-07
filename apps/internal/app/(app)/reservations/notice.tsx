@@ -13,7 +13,7 @@ export function ActionNotice({ error, done }: { error?: string; done?: string })
     return (
       <p
         role="alert"
-        className="mb-6 rounded-md bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:bg-rose-950/50 dark:text-rose-300"
+        className="mb-6 rounded-md bg-rose-50 px-4 py-3 text-sm text-rose-800"
       >
         {error}
       </p>
@@ -25,7 +25,7 @@ export function ActionNotice({ error, done }: { error?: string; done?: string })
     return (
       <p
         role="status"
-        className="mb-6 rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
+        className="mb-6 rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
       >
         {label} — recorded. The audit trail has the entry under your employee ID.
       </p>

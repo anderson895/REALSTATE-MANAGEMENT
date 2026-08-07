@@ -1,9 +1,31 @@
 import { headers } from 'next/headers';
+import Image from 'next/image';
 import { AppShell } from '@sfsr/ui';
 import { ROLE_LABELS, isInternalRole } from '@sfsr/domain';
 import { requireEmployee } from '@/lib/session';
-import { navigationFor } from '@/lib/navigation';
-import { SignOutButton } from './sign-out-button';
+import { departmentFor, navigationFor } from '@/lib/navigation';
+import { countWaitingFor, queueHrefFor } from '@/lib/notifications';
+import { NotificationBell } from './notification-bell';
+import { UserMenu } from './user-menu';
+
+/**
+ * The application shell, drawn from INTERNAL.xls sheet `USER INTERFACE`.
+ *
+ * ── One shell, every department ───────────────────────────────────────────
+ *
+ * The sheet draws five dashboards — Documentation staff and supervisor,
+ * Billing, Account Receivables, Sales Agent — and the sidebar is the SAME in
+ * all of them. Only the menu items change. So there is one skin here, not five,
+ * and the menu is not written per role either: `navigationFor(role)` filters
+ * the route list against the RBAC matrix, so a role's menu is whatever its
+ * grants say and the two cannot drift apart.
+ *
+ * An IT Administrator holds every module and therefore sees every item, which
+ * is what makes that account able to stand in for any department during the
+ * demo. That is a consequence of the grants, not a bypass: `requireModule()`
+ * and the Security Rules still decide what the pages behind those links will
+ * actually hand over.
+ */
 
 function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -24,50 +46,72 @@ export default async function InternalLayout({ children }: { children: React.Rea
     );
   }
 
+  // COST: 1 count() aggregation, or 0 for a role with no queue of its own.
+  const notifications = await countWaitingFor(session.role);
+
   return (
     <AppShell
-      brand="St. Francis Square Realty"
-      subtitle="Internal Management System"
+      variant="navy"
+      brand="St. Francis Square"
+      subtitle="Realty Corporation"
+      logo={
+        <Image
+          src="/logo.png"
+          alt=""
+          width={71}
+          height={128}
+          priority
+          className="h-8 w-auto shrink-0 object-contain"
+        />
+      }
       sections={navigationFor(session.role)}
       currentPath={currentPath}
       // An IT Administrator holds every module: nineteen items over five
       // groups, long enough that the group being worked in scrolls out of
       // sight. Only the group holding the current page starts open.
       collapsibleSections
+      topbar={
+        <div className="flex min-w-0 flex-1 items-center gap-4 px-4">
+          <div className="min-w-0">
+            <p className="truncate text-[15px] font-bold uppercase tracking-tight text-navy-800">
+              Internal Management System
+            </p>
+            {/* The department, not the job title — it is what distinguishes
+                one of these five near-identical dashboards from another. */}
+            <p className="truncate text-xs text-navy-500">{departmentFor(session.role)}</p>
+          </div>
+
+          {/*
+           * Just the bell and the account, in that order.
+           *
+           * The sheet also puts a clock and a Logout button along here. Neither
+           * survived contact: the clock told staff the time on a machine that
+           * already shows it in the corner of the screen, and Logout duplicated
+           * the Sign out already sitting in the account menu a few pixels away.
+           * Two controls that do the same thing means one of them goes unused.
+           */}
+          <div className="ml-auto flex shrink-0 items-center gap-3">
+            <NotificationBell count={notifications} href={queueHrefFor(session.role)} />
+
+            <UserMenu
+              name={session.displayName}
+              role={ROLE_LABELS[session.role]}
+              initials={initialsOf(session.displayName)}
+              employeeId={session.employeeId}
+              isSupervisor={session.isSupervisor}
+            />
+          </div>
+        </div>
+      }
       footer={
-        // Name first, then role, then the employee ID. Leading with "EMP012"
-        // made the sidebar address a record rather than a person; the ID is
-        // for the audit trail, not for greeting whoever is signed in.
-        <div className="space-y-2.5">
-          <div className="flex items-center gap-2.5">
-            <span
-              aria-hidden="true"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-600 text-[11px] font-semibold text-white"
-            >
-              {initialsOf(session.displayName)}
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-neutral-800 dark:text-neutral-100">
-                {session.displayName}
-              </p>
-              <p className="truncate text-[11px] text-neutral-500">
-                {ROLE_LABELS[session.role]}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
-              {session.employeeId}
-            </span>
-            {session.isSupervisor ? (
-              <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-800 dark:bg-brand-900/50 dark:text-brand-300">
-                Approver
-              </span>
-            ) : null}
-          </div>
-
-          <SignOutButton />
+        // The sheet closes the sidebar with this badge on the Documentation
+        // dashboards — the same three words the login screen leads with, which
+        // is what ties the door to the rooms behind it.
+        <div className="rounded-lg border border-gold-600/40 px-3 py-2.5 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-gold-300">
+            Secure · Efficient · Integrated
+          </p>
+          <p className="mt-0.5 text-[10px] text-white/70">Real Estate Management</p>
         </div>
       }
     >

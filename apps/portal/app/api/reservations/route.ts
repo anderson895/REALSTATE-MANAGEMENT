@@ -88,9 +88,28 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // keeping the transaction small reduces contention on the counter.
     const batch = db.batch();
 
+    /*
+     * The unit's project, copied onto the reservation.
+     *
+     * COST: 1 read, once, at submit. It buys the Documentation dashboard its
+     * per-project counters — INTERNAL.xls sheet `USER INTERFACE` breaks every
+     * summary card down by project — for 5 count() aggregations per status
+     * instead of a scan of the whole collection. Without it there is no way to
+     * ask "how many pending reservations in Emerald Park" that does not read
+     * every reservation and every unit behind them.
+     *
+     * The same denormalisation the buyer block below already does, and for the
+     * same reason: the internal screens read one document instead of joining.
+     * `workflow.submit` has already proved the unit exists, so a missing doc
+     * here means it was deleted between the two, and null is the honest answer.
+     */
+    const unitSnap = await db.collection('units').doc(data.unitId).get();
+    const projectId = unitSnap.exists ? (unitSnap.data()?.projectId ?? null) : null;
+
     batch.set(
       db.collection('reservations').doc(number.value),
       {
+        projectId,
         // Buyer details captured at STEP 2, denormalised onto the reservation
         // so the internal review screen reads one document rather than
         // joining back to the client profile.

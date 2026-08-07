@@ -153,11 +153,23 @@ service cloud.firestore {
 
     // ── Scheduling and announcements ───────────────────────────────────────
 
+    // A tripping request is raised by the buyer and CLAIMED by a sales agent —
+    // INTERNAL.xls, WEB PORTAL TO INTERNAL item 1: "ACCEPT/CONFIRM TRIPPING
+    // REQUEST (FIRST SALES AGENT TO ACCEPT)", approver column N/A. Nobody signs
+    // it off; whoever gets there first takes it.
+    //
+    // `update` for SALES is therefore correct, and it is why the RBAC matrix in
+    // packages/domain/src/rbac/permissions.ts grants SALES `modify` on
+    // SCHEDULING even though the RBAC.xls row reads "view & print". The two
+    // layers agreed on the wrong thing for a while; they now agree on this one.
+    // Move one and the other has to move with it.
     match /trippings/{trippingId} {
       allow read: if isClient() && resource.data.clientId == request.auth.uid
                   || hasRole(['IT_ADMINISTRATOR', 'SALES', 'ACCOUNT_RECEIVABLES']);
+      // Created from the Portal by the buyer, for the buyer. Never by staff.
       allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
       allow update: if hasRole(['IT_ADMINISTRATOR', 'SALES']);
+      // Retained for history. A withdrawn request is a status change, not a gap.
       allow delete: if false;
     }
 

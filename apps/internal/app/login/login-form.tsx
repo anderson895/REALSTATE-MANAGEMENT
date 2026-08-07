@@ -23,7 +23,7 @@ const INTERNAL_EMAIL_DOMAIN = 'sfsr.internal';
 
 /** Navy focus ring, because this card is not on the app's green chrome. */
 const FIELD_ON_LIGHT =
-  'border-neutral-300 bg-white text-neutral-900 focus:border-[#1b3a6b] focus:ring-2 focus:ring-[#1b3a6b]/20 dark:border-neutral-300 dark:bg-white dark:text-neutral-900';
+  'border-neutral-300 bg-white text-neutral-900 focus:border-[#1b3a6b] focus:ring-2 focus:ring-[#1b3a6b]/20';
 
 export function LoginForm() {
   const router = useRouter();

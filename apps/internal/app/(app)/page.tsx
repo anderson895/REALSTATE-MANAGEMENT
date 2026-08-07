@@ -1,7 +1,19 @@
 import { Money, ROLE_LABELS, canAccessModule, isInternalRole, modulesFor } from '@sfsr/domain';
+import {
+  countClients,
+  countDocumentQueue,
+  countReservationsByStatusAndProject,
+  getAdminFirestore,
+  getClientMasterfile,
+  listDocumentQueue,
+  listProjects,
+  searchClients,
+} from '@sfsr/infrastructure/server';
 import { Card, StatusBadge } from '@sfsr/ui';
 import { requireEmployee, toActor } from '@/lib/session';
 import { getAnalytics } from '@/lib/analytics';
+import { DOCUMENT_QUEUE_STATUSES, SUMMARY_CARDS } from '@/lib/documentation';
+import { DocumentationDashboard } from './documentation-dashboard';
 import {
   InventoryDonut,
   PipelineChart,
@@ -25,10 +37,37 @@ import {
  *
  * COST on a cache miss: 5 reads (project names, prices, parking) + 15 count()
  * aggregations + one per recent reservation. Zero on a hit. See lib/analytics.
+ *
+ * ── Why this page branches on role ────────────────────────────────────────
+ *
+ * INTERNAL.xls sheet `USER INTERFACE` does not draw one dashboard, it draws
+ * five — Documentation, Billing, Account Receivables and Sales each get their
+ * own, titled for the department. They share the shell and nothing else: a
+ * Documentation Staff opens on a verification queue, not on unit inventory.
+ *
+ * So `/` resolves to the dashboard for the signed-in role. The inventory view
+ * below stays the default for every role whose screen is not drawn yet, which
+ * keeps `/` a landing page that works for everyone — the thing `requireModule()`
+ * depends on when it turns someone away.
  */
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ client?: string; page?: string; q?: string }>;
+}) {
   const session = await requireEmployee();
   if (!isInternalRole(session.role)) return null;
+
+  if (session.role === 'DOCUMENTATION') {
+    const params = await searchParams;
+    return (
+      <DocumentationView
+        clientId={params.client ?? ''}
+        page={Number(params.page) || 1}
+        searchTerm={(params.q ?? '').trim()}
+      />
+    );
+  }
 
   const data = await getAnalytics();
   const showCharts = canAccessModule(toActor(session), 'ANALYTICS');
@@ -37,7 +76,9 @@ export default async function DashboardPage() {
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
       <header className="mb-8">
-        <h1 className="text-xl font-semibold">
+        <h1 className="text-2xl font-bold tracking-tight text-navy-800">
+          {/* split(' '), not split('') — the empty separator splits a string
+              into CHARACTERS, so "Joanna Flores" was greeted as "J". */}
           Welcome back, {session.displayName.split(' ')[0]}
         </h1>
         <p className="mt-1 text-sm text-neutral-500">
@@ -104,10 +145,10 @@ export default async function DashboardPage() {
       ) : (
         // No ANALYTICS grant: the same inventory position, without the charts.
         <Card className="mb-6">
-          <h2 className="border-b border-neutral-200 px-5 py-3 text-sm font-medium dark:border-neutral-800">
+          <h2 className="border-b border-neutral-200 px-5 py-3 text-sm font-medium">
             Unit inventory by status
           </h2>
-          <ul className="divide-y divide-neutral-100 dark:divide-neutral-800">
+          <ul className="divide-y divide-neutral-100">
             {(
               [
                 ['Available', data.available],
@@ -125,7 +166,7 @@ export default async function DashboardPage() {
       )}
 
       <Card>
-        <h2 className="border-b border-neutral-200 px-5 py-3 text-sm font-medium dark:border-neutral-800">
+        <h2 className="border-b border-neutral-200 px-5 py-3 text-sm font-medium">
           By project
         </h2>
         <table className="w-full text-sm">
@@ -138,7 +179,7 @@ export default async function DashboardPage() {
               <th className="px-5 py-2 text-right font-medium">Parking</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+          <tbody className="divide-y divide-neutral-100">
             {data.projects.map((p) => (
               <tr key={p.id}>
                 <td className="px-5 py-2.5">
@@ -198,7 +239,7 @@ function Panel({
 }) {
   return (
     <Card>
-      <div className="border-b border-neutral-200 px-5 py-3 dark:border-neutral-800">
+      <div className="border-b border-neutral-200 px-5 py-3">
         <h2 className="text-sm font-medium">{title}</h2>
         <p className="mt-0.5 text-xs text-neutral-400">{note}</p>
       </div>
@@ -206,3 +247,90 @@ function Panel({
     </Card>
   );
 }
+
+/**
+ * The Documentation Department's landing screen.
+ *
+ * Split out rather than inlined into the branch above so the read budget is
+ * visible in one place.
+ *
+ * COST: 5 project names, then one count() per (card status x project) — 25 of
+ * them for the sheet's five cards and five projects — plus 1 for the client
+ * tally. Then the queue join: up to 25 reservations, their distinct units and
+ * buyers in two `getAll` round trips, and one `in` query for the documents. One
+ * further read when a buyer is selected.
+ *
+ * All of it flat. Nothing here grows as the reservation collection does, which
+ * is the rule the per-project counters were built around — see
+ * `countReservationsByStatusAndProject`.
+ *
+ * Uncached, unlike the analytics snapshot: this is a work queue, and a reviewer
+ * who verifies a payment must not find the row still sitting here on the way
+ * back.
+ */
+async function DocumentationView({
+  clientId,
+  page,
+  searchTerm,
+}: {
+  clientId: string;
+  page: number;
+  searchTerm: string;
+}) {
+  const db = getAdminFirestore();
+  const session = await requireEmployee();
+
+  // The cards' statuses, taken from the card table itself so a new card cannot
+  // be added without its aggregation following it.
+  const cardStatuses = SUMMARY_CARDS.map((c) => c.status).filter((s) => s !== null);
+
+  const projects = await listProjects(db);
+  const projectIds = projects.map((p) => p.id);
+
+  const [byStatusProject, clientCount, queue, queueTotal, selectedClient, searchResults] =
+    await Promise.all([
+      countReservationsByStatusAndProject(db, cardStatuses, projectIds),
+      countClients(db),
+      listDocumentQueue(db, DOCUMENT_QUEUE_STATUSES, QUEUE_PAGE_SIZE, page),
+      countDocumentQueue(db, DOCUMENT_QUEUE_STATUSES),
+      clientId ? getClientMasterfile(db, clientId) : Promise.resolve(null),
+      searchTerm ? searchClients(db, searchTerm) : Promise.resolve([]),
+    ]);
+
+  return (
+    <div className="mx-auto max-w-7xl px-6 py-8">
+      <header className="mb-7">
+        <h1 className="text-2xl font-bold tracking-tight text-navy-800">
+          Documentation Department Dashboard
+        </h1>
+        <div aria-hidden="true" className="mt-2.5 h-0.5 w-16 rounded-full bg-gold-500" />
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-neutral-500">
+          Welcome back, {session.displayName.split(' ')[0]}. Reservations waiting on payment and
+          documentary verification, oldest first.
+        </p>
+      </header>
+
+      <DocumentationDashboard
+        byStatusProject={byStatusProject}
+        clientCount={clientCount}
+        projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+        queue={queue}
+        queueTotal={queueTotal}
+        page={page}
+        pageSize={QUEUE_PAGE_SIZE}
+        actor={toActor(session)}
+        selectedClient={selectedClient}
+        searchTerm={searchTerm}
+        searchResults={searchResults}
+      />
+    </div>
+  );
+}
+
+/**
+ * Rows per page in the document verification queue.
+ *
+ * Named because the pager quotes it back — "Showing 1 to 5 of 41" has to agree
+ * with the query that fetched those five.
+ */
+const QUEUE_PAGE_SIZE = 10;

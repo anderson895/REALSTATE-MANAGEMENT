@@ -4,3 +4,31 @@
 /* Tailwind v4 auto-detects sources next to this file; workspace packages need
    declaring explicitly or their classes get tree-shaken out. */
 @source '../../../packages/ui/src';
+
+/*
+ * The navy and gold palette this app is drawn in lives in the shared
+ * stylesheet, not here.
+ *
+ * It started here, which was right while only this app's own pages used it.
+ * `AppShell` is shared, though, and its navy skin has to resolve in whichever
+ * app compiles it — so the tokens had to move to `packages/ui/src/styles.css`
+ * where both builds can see them. The Portal never spends them, and Tailwind
+ * v4 emits only what a build uses, so it carries no weight there.
+ */
+
+/*
+ * No dark mode in this app.
+ *
+ * INTERNAL.xls sheet `USER INTERFACE` draws one treatment: navy sidebar, light
+ * content. There is no dark variant of it to switch to, so the picker was
+ * offering a choice the design cannot honour — and "system" silently repainted
+ * the whole thing for the majority of staff whose Windows is set to dark.
+ *
+ * The root layout pins `forced="light"`, which also makes every ThemeToggle in
+ * the shared package render nothing. This rule is the belt to that braces: if
+ * `.dark` is ever set on <html> by something else, the app still renders as
+ * designed rather than half-repainted.
+ */
+html.dark {
+  color-scheme: light;
+}

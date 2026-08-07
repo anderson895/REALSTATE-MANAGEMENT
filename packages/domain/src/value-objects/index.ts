@@ -7,4 +7,5 @@ export {
   EmployeeId,
   SalesStaffId,
   ReservationNumber,
+  trippingReference,
 } from './identifiers';

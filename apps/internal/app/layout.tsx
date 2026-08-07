@@ -12,12 +12,29 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    // suppressHydrationWarning is required: next-themes sets class="dark" on
-    // <html> before React hydrates, so the server and client markup differ by
-    // design on this element only.
+    // suppressHydrationWarning is still required even though the theme is
+    // pinned: next-themes writes the resolved class onto <html> from a blocking
+    // script before React hydrates, so the server and client markup differ by
+    // design on this element. The Portal pins a theme too and keeps this for
+    // the same reason.
     <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased">
-        <ThemeProvider>{children}</ThemeProvider>
+        {/*
+         * Pinned light — there is no theme mode in this app any more.
+         *
+         * INTERNAL.xls sheet `USER INTERFACE` draws one treatment: navy
+         * sidebar, light content. There was no dark version of it to switch
+         * to, so the picker offered a choice the design could not honour, and
+         * the old `system` default silently repainted the whole system in
+         * near-black for the majority of staff whose Windows is set to dark.
+         *
+         * `forced` rather than deleting the provider outright: `ThemeToggle`
+         * and `ThemeToggleCompact` already return null when a theme is pinned,
+         * so the shared mobile drawer loses its picker with nothing threaded
+         * through the shell to switch it off. The Portal does the same thing
+         * for the same reason.
+         */}
+        <ThemeProvider forced="light">{children}</ThemeProvider>
       </body>
     </html>
   );
