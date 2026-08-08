@@ -50,6 +50,24 @@ service cloud.firestore {
     // `allow write: if false` — so a supervisor clause in these rules would be
     // unreachable code implying a control that is not actually here.
 
+    /*
+     * IT_ADMINISTRATOR — the SYSTEM, not the business.
+     *
+     * note.txt strips this role of walk-in buyers, payment entry, processing,
+     * sales and finance: "accessible lang sa maintenance system only,
+     * accessible add users only". So `isAdmin()` now appears only on the
+     * collections that ARE the system — employees, the sales org roster and
+     * the inventory catalogue — and nowhere near a client, a reservation, a
+     * payment or a document.
+     *
+     * That is segregation of duties: an administrator who can create the
+     * accounts and also verify the payments and approve the reservation can
+     * move money alone, and nothing in the audit trail would look unusual.
+     *
+     * These rules are layer 3. The same restriction is in the RBAC matrix at
+     * packages/domain/src/rbac/permissions.ts; move one and the other has to
+     * move with it.
+     */
     function isAdmin() {
       return role() == 'IT_ADMINISTRATOR';
     }
@@ -91,10 +109,10 @@ service cloud.firestore {
       // Documentation owns the masterfile, Loans and Legal are granted
       // "View Client profile" in USER ROLE ACCESS.
       allow read: if owns(clientUid)
-                  || hasRole(['IT_ADMINISTRATOR', 'DOCUMENTATION', 'LOAN_OFFICER',
+                  || hasRole(['DOCUMENTATION', 'LOAN_OFFICER',
                               'LEGAL_COUNSEL', 'ACCOUNT_RECEIVABLES']);
       allow create: if owns(clientUid);
-      allow update: if owns(clientUid) || hasRole(['IT_ADMINISTRATOR', 'DOCUMENTATION']);
+      allow update: if owns(clientUid) || hasRole(['DOCUMENTATION']);
       // Client records are retained for audit — never deleted from a client.
       allow delete: if false;
     }
@@ -113,10 +131,28 @@ service cloud.firestore {
 
     // ── Reservations ───────────────────────────────────────────────────────
 
+    /*
+     * Sales sees the OUTCOME, not the process.
+     *
+     * note.txt: "si sales agent hindi makaka receieved ng verification —
+     * marerecieved lang ni sales agent kapag verified na lahat sa billing,
+     * documentation, Documentation Supervisor."
+     *
+     * SALES was in the same list as everyone else here, which let an agent
+     * read a reservation mid-verification: the unverified payment, the noted
+     * deficiency and its reason. Splitting the clause is what actually
+     * enforces the rule — the RBAC matrix works per MODULE and cannot express
+     * "these rows but not those".
+     *
+     * Kept in step with SALES_VISIBLE_STATUSES in packages/domain/src/entities/
+     * reservation.ts, which is what any Sales-facing query must filter on.
+     */
     match /reservations/{reservationNo} {
       allow read: if isClient() && resource.data.clientId == request.auth.uid
-                  || hasRole(['IT_ADMINISTRATOR', 'ACCOUNT_RECEIVABLES', 'DOCUMENTATION',
-                              'BILLING', 'LOAN_OFFICER', 'CASH_CLERK', 'SALES']);
+                  || hasRole(['ACCOUNT_RECEIVABLES', 'DOCUMENTATION',
+                              'BILLING', 'LOAN_OFFICER', 'CASH_CLERK'])
+                  || (hasRole(['SALES'])
+                      && resource.data.status in ['Approved', 'ContractSigned', 'Completed']);
       // Every write runs server-side inside a transaction that also updates the
       // unit and the audit log. Allowing browser writes would let a client
       // change its own status.
@@ -127,14 +163,14 @@ service cloud.firestore {
 
     match /payments/{paymentId} {
       allow read: if isClient() && resource.data.clientId == request.auth.uid
-                  || hasRole(['IT_ADMINISTRATOR', 'ACCOUNT_RECEIVABLES', 'BILLING',
+                  || hasRole(['ACCOUNT_RECEIVABLES', 'BILLING',
                               'CASH_CLERK', 'ACCOUNTING']);
       allow write: if false;
     }
 
     match /documents/{documentId} {
       allow read: if isClient() && resource.data.buyerUid == request.auth.uid
-                  || hasRole(['IT_ADMINISTRATOR', 'DOCUMENTATION', 'LOAN_OFFICER',
+                  || hasRole(['DOCUMENTATION', 'LOAN_OFFICER',
                               'LEGAL_COUNSEL']);
       // Buyers upload; the OCR and validation fields are written server-side.
       allow create: if isClient() && request.resource.data.buyerUid == request.auth.uid;
@@ -146,7 +182,7 @@ service cloud.firestore {
     match /soa/{soaId} {
       // "View Statement of Account (SOA)" is a Permanent Client feature only.
       allow read: if isPermanentClient() && resource.data.clientId == request.auth.uid
-                  || hasRole(['IT_ADMINISTRATOR', 'BILLING', 'ACCOUNTING',
+                  || hasRole(['BILLING', 'ACCOUNTING',
                               'ACCOUNT_RECEIVABLES', 'LOAN_OFFICER']);
       allow write: if false;
     }
@@ -165,17 +201,17 @@ service cloud.firestore {
     // Move one and the other has to move with it.
     match /trippings/{trippingId} {
       allow read: if isClient() && resource.data.clientId == request.auth.uid
-                  || hasRole(['IT_ADMINISTRATOR', 'SALES', 'ACCOUNT_RECEIVABLES']);
+                  || hasRole(['SALES', 'ACCOUNT_RECEIVABLES']);
       // Created from the Portal by the buyer, for the buyer. Never by staff.
       allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
-      allow update: if hasRole(['IT_ADMINISTRATOR', 'SALES']);
+      allow update: if hasRole(['SALES']);
       // Retained for history. A withdrawn request is a status change, not a gap.
       allow delete: if false;
     }
 
     match /announcements/{announcementId} {
       allow read: if true;
-      allow write: if hasRole(['IT_ADMINISTRATOR', 'MARKETING']);
+      allow write: if hasRole(['MARKETING']);
     }
 
     match /notifications/{notificationId} {

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "EMP026",
+    "fullName": "Maria Theresa Santos",
+    "department": "Sales Department",
+    "position": "Sales Group Head",
+    "username": "mtsantos",
+    "seedPassword": "Sales@123",
+    "userRole": "Group Head",
+    "status": "Active",
+    "isSupervisor": false,
+    "sourceSheet": "SALES"
+  },
+  {
+    "id": "EMP027",
+    "fullName": "Patricia Gomez",
+    "department": "Sales Department",
+    "position": "Broker",
+    "username": "pgomez",
+    "seedPassword": "Sales@123",
+    "userRole": "Broker",
+    "status": "Active",
+    "isSupervisor": false,
+    "sourceSheet": "SALES"
+  },
+  {
+    "id": "EMP028",
+    "fullName": "John Paul Ramos",
+    "department": "Sales Department",
+    "position": "Sales Agent",
+    "username": "jramos",
+    "seedPassword": "Sales@123",
+    "userRole": "Agent",
+    "status": "Active",
+    "isSupervisor": false,
+    "sourceSheet": "SALES"
+  },
+  {
+    "id": "EMP029",
+    "fullName": "Kevin Santos",
+    "department": "Sales Department",
+    "position": "Sales Agent",
+    "username": "ksantos",
+    "seedPassword": "Sales@123",
+    "userRole": "Agent",
+    "status": "Active",
+    "isSupervisor": false,
+    "sourceSheet": "SALES"
+  }
+]

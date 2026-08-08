@@ -65,7 +65,7 @@ export function LifecycleStepper({ status }: { status: ReservationStatus }) {
               className={cn(
                 'flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold',
                 done && !derailed
-                  ? 'bg-brand-600 text-white'
+                  ? 'bg-navy-800 text-white'
                   : done
                     ? 'bg-amber-500 text-white'
                     : 'bg-neutral-200 text-neutral-500',

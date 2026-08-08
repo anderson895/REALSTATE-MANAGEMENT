@@ -31,7 +31,15 @@ $ErrorActionPreference = 'Stop'
 # $PSScriptRoot is unreliable inside param defaults under Windows PowerShell 5.1,
 # so resolve here instead.
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-if (-not $SourceDir) { $SourceDir = (Resolve-Path (Join-Path $scriptDir '..\..')).Path }
+
+# The workbooks live in Development_Guide/, not at the repo root. This default
+# still pointed at the root, so every run died on the first Open() with "could
+# not find the object ... DATABASE PROJECT.xls" — a path mistake that reads like
+# a driver fault. Falls back to the root so an older layout still resolves.
+if (-not $SourceDir) {
+    $guide = Resolve-Path (Join-Path $scriptDir '..\..\Development_Guide') -ErrorAction SilentlyContinue
+    $SourceDir = if ($guide) { $guide.Path } else { (Resolve-Path (Join-Path $scriptDir '..\..')).Path }
+}
 if (-not $OutDir) { $OutDir = Join-Path $scriptDir 'data' }
 
 # ── Helpers ──────────────────────────────────────────────────────────────────

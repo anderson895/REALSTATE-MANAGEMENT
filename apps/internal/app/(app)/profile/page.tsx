@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
-import { KeyRound, ShieldCheck } from 'lucide-react';
-import { ROLE_LABELS, isInternalRole, modulesFor } from '@sfsr/domain';
+import { KeyRound, ShieldCheck, UserRound } from 'lucide-react';
+import { ROLE_LABELS, can, isInternalRole, modulesFor } from '@sfsr/domain';
 import { requireEmployee } from '@/lib/session';
 import { departmentFor } from '@/lib/navigation';
 
@@ -25,6 +25,19 @@ export const metadata: Metadata = { title: 'My Profile' };
 export default async function ProfilePage() {
   const session = await requireEmployee();
   const modules = isInternalRole(session.role) ? modulesFor(session.role) : [];
+
+  /*
+   * Whether this account can actually sign anything off.
+   *
+   * NOT the supervisor flag on its own, which is what the row below used to
+   * read. Approval needs the flag AND a grant it could act on, and a Billing
+   * supervisor has the flag without the grant — so the page told them they
+   * were "the final stage of its transactions" when no screen in the system
+   * will ever offer them an Approve button.
+   */
+  const mayApprove =
+    isInternalRole(session.role) &&
+    can({ role: session.role, isSupervisor: session.isSupervisor }, 'APPROVAL_MONITORING', 'approve');
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
@@ -51,12 +64,24 @@ export default async function ProfilePage() {
               {isInternalRole(session.role) ? ROLE_LABELS[session.role] : session.role}
             </p>
           </div>
-          {session.isSupervisor ? (
-            <span className="ml-auto flex shrink-0 items-center gap-1.5 rounded-full bg-gold-100 px-2.5 py-1 text-[11px] font-semibold text-gold-900">
+          {/* Both ranks, always. This drew a gold "Approver" pill for
+              supervisors and nothing at all for staff — so an employee looking
+              for their rank found a blank space, which says nothing rather
+              than "Staff". */}
+          <span
+            className={
+              session.isSupervisor
+                ? 'ml-auto flex shrink-0 items-center gap-1.5 rounded-full bg-gold-100 px-2.5 py-1 text-[11px] font-semibold text-gold-900'
+                : 'ml-auto flex shrink-0 items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-semibold text-neutral-600'
+            }
+          >
+            {session.isSupervisor ? (
               <ShieldCheck className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-              Approver
-            </span>
-          ) : null}
+            ) : (
+              <UserRound className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+            )}
+            {session.isSupervisor ? 'Supervisor' : 'Staff'}
+          </span>
         </div>
 
         <dl className="divide-y divide-neutral-100">
@@ -67,12 +92,15 @@ export default async function ProfilePage() {
             label="Desk"
             value={isInternalRole(session.role) ? departmentFor(session.role) : '—'}
           />
+          <Row label="Rank" value={session.isSupervisor ? 'Supervisor' : 'Staff'} />
           <Row
             label="Approval rights"
             value={
-              session.isSupervisor
-                ? 'Yes — this account is the final stage of its transactions'
-                : 'No — approvals go to your supervisor'
+              mayApprove
+                ? 'Final approval — and for that reason the checks before it are left to staff'
+                : session.isSupervisor
+                  ? 'None over reservations — this desk is finished once its half is verified'
+                  : 'None — approvals go to your supervisor'
             }
           />
           <Row label="Modules available" value={`${modules.length}`} />

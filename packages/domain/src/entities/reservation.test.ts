@@ -4,6 +4,7 @@ import {
   DOCUMENT_SUBMISSION_DAYS,
   RESERVATION_STATUSES,
   Reservation,
+  isVisibleToSales,
   type ReservationStatus,
 } from './reservation';
 import { ClientId, EmployeeId, ReservationNumber, UnitId } from '../value-objects/identifiers';
@@ -15,8 +16,32 @@ const CLIENT = new ClientId('client-uid-001');
 const UNIT = new UnitId('U001');
 const STAFF = new EmployeeId('EMP012');
 const SUPERVISOR = new EmployeeId('EMP011');
+const BILLING = new EmployeeId('EMP014');
 
-function makeReservation(status: ReservationStatus = 'PendingPaymentVerification'): Reservation {
+/**
+ * Rebuilds a reservation in a CONSISTENT state.
+ *
+ * The two verification tracks are the source of truth and `status` is derived
+ * from them, so a fixture cannot just assert a status any more — reconstituting
+ * "DocumentsVerified" with neither track recorded would produce a reservation
+ * the entity itself could never have reached, and the first call on it would
+ * derive its way back to Pending.
+ *
+ * These are the states that are actually reachable:
+ *   PendingPaymentVerification — neither track, OR documents only
+ *   PaymentVerified            — payment only
+ *   DocumentsVerified          — both, waiting on a supervisor
+ */
+function makeReservation(
+  status: ReservationStatus = 'PendingPaymentVerification',
+  tracks?: { payment?: boolean; documents?: boolean },
+): Reservation {
+  const payment = tracks?.payment ?? ['PaymentVerified', 'DocumentsVerified'].includes(status);
+  const documents = tracks?.documents ?? status === 'DocumentsVerified';
+
+  // Everything from Approved onward has necessarily been through both.
+  const past = ['Approved', 'ContractSigned', 'Completed'].includes(status);
+
   return Reservation.reconstitute({
     number: NUMBER,
     clientId: CLIENT,
@@ -28,6 +53,8 @@ function makeReservation(status: ReservationStatus = 'PendingPaymentVerification
     status,
     deficiencyDueAt: status === 'DeficiencyNoted' ? new Date(AT.getTime() + 86_400_000) : null,
     deficiencyReason: status === 'DeficiencyNoted' ? 'blurred ID' : null,
+    paymentVerified: payment || past ? { by: BILLING, at: AT } : null,
+    documentsVerified: documents || past ? { by: STAFF, at: AT } : null,
   });
 }
 
@@ -88,10 +115,64 @@ describe('Reservation — the approval path', () => {
     expect(r.status).toBe('DocumentsVerified');
   });
 
-  it('cannot jump from submission straight to approved', () => {
+  /**
+   * The gate note.txt asks for: "maapprove niya lang final kung approve na ng
+   * billing and documentation".
+   *
+   * Now a BusinessRuleViolationError rather than an IllegalStateTransitionError.
+   * The status machine alone can no longer catch this — with the tracks
+   * parallel, `approve` is refused because the WORK is unfinished, not because
+   * the status is wrong — and the message has to name which desk is missing so
+   * the supervisor knows who to chase.
+   */
+  it('refuses approval until both desks have finished', () => {
     const r = makeReservation();
-    expect(() => r.approve(SUPERVISOR, true, AT)).toThrow(IllegalStateTransitionError);
+    expect(() => r.approve(SUPERVISOR, true, AT)).toThrow(BusinessRuleViolationError);
+    expect(() => r.approve(SUPERVISOR, true, AT)).toThrow(/payment \(Billing\)/);
+    expect(() => r.approve(SUPERVISOR, true, AT)).toThrow(/Documentation/);
     expect(r.status).toBe('PendingPaymentVerification');
+  });
+
+  it('still refuses when only one desk has finished', () => {
+    const paymentOnly = makeReservation('PaymentVerified');
+    expect(() => paymentOnly.approve(SUPERVISOR, true, AT)).toThrow(/documentary requirements/);
+
+    // Documents done, payment outstanding — the case the old sequential chain
+    // could not represent at all.
+    const documentsOnly = makeReservation('PendingPaymentVerification', { documents: true });
+    expect(() => documentsOnly.approve(SUPERVISOR, true, AT)).toThrow(/payment \(Billing\)/);
+  });
+
+  it('lets the two desks finish in either order', () => {
+    const documentsFirst = makeReservation();
+    documentsFirst.verifyDocuments(STAFF, AT);
+    expect(documentsFirst.status).toBe('PendingPaymentVerification');
+    documentsFirst.verifyPayment(BILLING, AT);
+    expect(documentsFirst.status).toBe('DocumentsVerified');
+    expect(documentsFirst.isFullyVerified).toBe(true);
+
+    const paymentFirst = makeReservation();
+    paymentFirst.verifyPayment(BILLING, AT);
+    paymentFirst.verifyDocuments(STAFF, AT);
+    expect(paymentFirst.status).toBe('DocumentsVerified');
+  });
+
+  it('records who verified each half', () => {
+    const r = makeReservation();
+    r.verifyPayment(BILLING, AT);
+    r.verifyDocuments(STAFF, AT);
+
+    // note.txt: "ilologs kung sinong staff ang nag verify".
+    expect(r.paymentVerified?.by.value).toBe(BILLING.value);
+    expect(r.documentsVerified?.by.value).toBe(STAFF.value);
+  });
+
+  it('refuses to verify the same half twice', () => {
+    const r = makeReservation();
+    r.verifyPayment(BILLING, AT);
+    // Silently overwriting would lose the name of whoever actually did it.
+    expect(() => r.verifyPayment(SUPERVISOR, AT)).toThrow(BusinessRuleViolationError);
+    expect(r.paymentVerified?.by.value).toBe(BILLING.value);
   });
 });
 
@@ -124,7 +205,11 @@ describe('Reservation — deficiencies', () => {
     r.noteDeficiency('missing TIN', STAFF, AT);
     r.verifyDocuments(STAFF, AT);
 
-    expect(r.status).toBe('DocumentsVerified');
+    // Back to pending PAYMENT, not to DocumentsVerified: the documents are now
+    // in order but Billing has still not cleared the fee, and the headline
+    // names what the reservation is waiting for.
+    expect(r.status).toBe('PendingPaymentVerification');
+    expect(r.documentsVerified?.by.value).toBe(STAFF.value);
     expect(r.deficiencyDueAt).toBeNull();
     expect(r.deficiencyReason).toBeNull();
   });
@@ -178,23 +263,133 @@ describe('Reservation — expiry and cancellation', () => {
   });
 });
 
+/** Terminal: every call is refused. */
+const FROZEN: Record<ReservationStatus, 'THROWS'> = {
+  PendingPaymentVerification: 'THROWS',
+  PaymentVerified: 'THROWS',
+  DocumentsVerified: 'THROWS',
+  Approved: 'THROWS',
+  ContractSigned: 'THROWS',
+  Completed: 'THROWS',
+  DeficiencyNoted: 'THROWS',
+  Expired: 'THROWS',
+  Cancelled: 'THROWS',
+};
+
 describe('Reservation — exhaustive transition matrix', () => {
-  // Transcribed independently from Development Plan.md §8.4 rather than read
-  // from the entity, so this asserts the specification, not the implementation.
-  const SPEC: Record<ReservationStatus, readonly ReservationStatus[]> = {
-    PendingPaymentVerification: ['PaymentVerified', 'DeficiencyNoted'],
-    PaymentVerified: ['DocumentsVerified', 'DeficiencyNoted'],
-    DocumentsVerified: ['Approved', 'DeficiencyNoted'],
-    Approved: ['ContractSigned'],
-    ContractSigned: ['Completed'],
-    DeficiencyNoted: ['PaymentVerified', 'DocumentsVerified', 'Expired'],
-    Expired: ['Cancelled'],
-    Cancelled: [],
-    Completed: [],
+  /*
+   * Transcribed from the SPECIFICATION rather than read from the entity, so
+   * this disagrees with the implementation if the two ever drift.
+   *
+   * ── Why this is a result table and not a from -> to matrix ──────────────
+   *
+   * It used to be: legal moves listed per status, everything else throws. That
+   * shape assumed `status` WAS the state. Under note.txt's parallel tracks it
+   * is derived from them, so the same call produces different statuses
+   * depending on what the other desk has already done — verifying documents
+   * lands on DocumentsVerified if Billing is finished, and leaves the status
+   * on PendingPaymentVerification if it is not.
+   *
+   * So each cell states what the call ACTUALLY produces: a status, or THROWS.
+   * `makeReservation` supplies tracks consistent with `from`, which is what
+   * makes each row deterministic.
+   */
+  const THROWS = 'THROWS' as const;
+  type Outcome = ReservationStatus | typeof THROWS;
+
+  const RESULT: Record<ReservationStatus, Record<ReservationStatus, Outcome>> = {
+    // Neither track recorded yet.
+    PendingPaymentVerification: {
+      PaymentVerified: 'PaymentVerified',
+      // Legal, and real work — but payment is still outstanding, so the
+      // headline stays put.
+      DocumentsVerified: 'PendingPaymentVerification',
+      DeficiencyNoted: 'DeficiencyNoted',
+      Approved: THROWS,
+      ContractSigned: THROWS,
+      Completed: THROWS,
+      Expired: THROWS,
+      Cancelled: THROWS,
+      PendingPaymentVerification: THROWS,
+    },
+    // Billing done, Documentation outstanding.
+    PaymentVerified: {
+      DocumentsVerified: 'DocumentsVerified',
+      DeficiencyNoted: 'DeficiencyNoted',
+      // Already recorded — a second verification is refused rather than
+      // silently overwriting who did it.
+      PaymentVerified: THROWS,
+      Approved: THROWS,
+      ContractSigned: THROWS,
+      Completed: THROWS,
+      Expired: THROWS,
+      Cancelled: THROWS,
+      PendingPaymentVerification: THROWS,
+    },
+    // Both done — the only state a supervisor may sign.
+    DocumentsVerified: {
+      Approved: 'Approved',
+      DeficiencyNoted: 'DeficiencyNoted',
+      PaymentVerified: THROWS,
+      DocumentsVerified: THROWS,
+      ContractSigned: THROWS,
+      Completed: THROWS,
+      Expired: THROWS,
+      Cancelled: THROWS,
+      PendingPaymentVerification: THROWS,
+    },
+    Approved: {
+      ContractSigned: 'ContractSigned',
+      PaymentVerified: THROWS,
+      DocumentsVerified: THROWS,
+      Approved: THROWS,
+      Completed: THROWS,
+      DeficiencyNoted: THROWS,
+      Expired: THROWS,
+      Cancelled: THROWS,
+      PendingPaymentVerification: THROWS,
+    },
+    ContractSigned: {
+      Completed: 'Completed',
+      PaymentVerified: THROWS,
+      DocumentsVerified: THROWS,
+      Approved: THROWS,
+      ContractSigned: THROWS,
+      DeficiencyNoted: THROWS,
+      Expired: THROWS,
+      Cancelled: THROWS,
+      PendingPaymentVerification: THROWS,
+    },
+    // Curing a deficiency re-runs whichever track raised it. The fixture has
+    // neither recorded, so documents alone returns it to pending payment.
+    DeficiencyNoted: {
+      PaymentVerified: 'PaymentVerified',
+      DocumentsVerified: 'PendingPaymentVerification',
+      Expired: 'Expired',
+      Approved: THROWS,
+      ContractSigned: THROWS,
+      Completed: THROWS,
+      DeficiencyNoted: THROWS,
+      Cancelled: THROWS,
+      PendingPaymentVerification: THROWS,
+    },
+    Expired: {
+      Cancelled: 'Cancelled',
+      PaymentVerified: THROWS,
+      DocumentsVerified: THROWS,
+      Approved: THROWS,
+      ContractSigned: THROWS,
+      Completed: THROWS,
+      DeficiencyNoted: THROWS,
+      Expired: THROWS,
+      PendingPaymentVerification: THROWS,
+    },
+    Cancelled: FROZEN,
+    Completed: FROZEN,
   };
 
   const attempt: Record<ReservationStatus, (r: Reservation) => void> = {
-    PaymentVerified: (r) => r.verifyPayment(STAFF, AT),
+    PaymentVerified: (r) => r.verifyPayment(BILLING, AT),
     DocumentsVerified: (r) => r.verifyDocuments(STAFF, AT),
     Approved: (r) => r.approve(SUPERVISOR, true, AT),
     ContractSigned: (r) => r.signContract(AT),
@@ -209,20 +404,113 @@ describe('Reservation — exhaustive transition matrix', () => {
 
   for (const from of RESERVATION_STATUSES) {
     for (const to of RESERVATION_STATUSES) {
-      const legal = SPEC[from].includes(to);
+      const expected = RESULT[from][to];
 
-      it(`${from} -> ${to} ${legal ? 'is allowed' : 'THROWS'}`, () => {
+      const label =
+        expected === THROWS
+          ? 'THROWS'
+          : expected === from
+            ? 'is accepted but does not move'
+            : `-> ${expected}`;
+
+      it(`${from} + ${to} ${label}`, () => {
         const r = makeReservation(from);
         const run = () => attempt[to](r);
 
-        if (legal) {
-          run();
-          expect(r.status).toBe(to);
-        } else {
+        if (expected === THROWS) {
           expect(run).toThrow();
           expect(r.status, 'status must be unchanged after a rejected move').toBe(from);
+        } else {
+          run();
+          expect(r.status).toBe(expected);
         }
       });
     }
   }
+});
+
+/**
+ * note.txt: "si sales agent hindi makaka receieved ng verification —
+ * marerecieved lang ni sales agent kapag verified na lahat sa billing,
+ * documentation, Documentation Supervisor."
+ *
+ * Exhaustive over every status, so a status added later has to be classified
+ * deliberately instead of defaulting into the agent's view.
+ */
+describe('what a Sales Agent may see', () => {
+  const VISIBLE: readonly ReservationStatus[] = ['Approved', 'ContractSigned', 'Completed'];
+
+  for (const status of RESERVATION_STATUSES) {
+    const expected = VISIBLE.includes(status);
+    it(`${status} is ${expected ? 'visible' : 'HIDDEN'} to Sales`, () => {
+      expect(isVisibleToSales(status)).toBe(expected);
+    });
+  }
+
+  it('hides everything that is still being verified', () => {
+    // The whole point: no half-cleared payment, no deficiency and no reason
+    // for one reaches the agent who sold the unit.
+    expect(isVisibleToSales('PendingPaymentVerification')).toBe(false);
+    expect(isVisibleToSales('PaymentVerified')).toBe(false);
+    expect(isVisibleToSales('DocumentsVerified')).toBe(false);
+    expect(isVisibleToSales('DeficiencyNoted')).toBe(false);
+  });
+
+  it('opens up exactly at the supervisor signature', () => {
+    const r = makeReservation('DocumentsVerified');
+    expect(isVisibleToSales(r.status)).toBe(false);
+    r.approve(SUPERVISOR, true, AT);
+    expect(isVisibleToSales(r.status)).toBe(true);
+  });
+});
+
+/**
+ * A deficiency raised AFTER both desks finished used to be a dead end.
+ *
+ * Both flags were set, so neither desk could act again; `Approved` is not
+ * reachable from `DeficiencyNoted`, so the supervisor could not sign either.
+ * The only remaining move was expiry — on a problem the buyer has 24 hours to
+ * fix. Re-verification while curing is what reopens it.
+ */
+describe('curing a deficiency raised after both desks finished', () => {
+  it('lets the desk that raised it verify again', () => {
+    const r = makeReservation('DocumentsVerified');
+    expect(r.isFullyVerified).toBe(true);
+
+    r.noteDeficiency('ID photo does not match the TIN', STAFF, AT);
+    expect(r.status).toBe('DeficiencyNoted');
+
+    // Already recorded once, and allowed through anyway because the record is
+    // being cured. Curing CLEARS the deficiency, which returns the reservation
+    // to fully verified in one step — the other desk's signature never lapsed.
+    r.verifyDocuments(STAFF, AT);
+
+    expect(r.status).toBe('DocumentsVerified');
+    expect(r.deficiencyReason).toBeNull();
+    expect(r.isFullyVerified).toBe(true);
+  });
+
+  it('offers the other desk too, in case the deficiency was theirs', () => {
+    const r = makeReservation('DocumentsVerified');
+    r.noteDeficiency('payment reference does not match the receipt', STAFF, AT);
+
+    // Whichever desk owns the problem may act; only one of them needs to.
+    r.verifyPayment(BILLING, AT);
+    expect(r.status).toBe('DocumentsVerified');
+    expect(r.paymentVerified?.by.value).toBe(BILLING.value);
+  });
+
+  it('can be approved again once cured', () => {
+    const r = makeReservation('DocumentsVerified');
+    r.noteDeficiency('blurred ID', STAFF, AT);
+    r.verifyDocuments(STAFF, AT);
+    r.approve(SUPERVISOR, true, AT);
+    expect(r.status).toBe('Approved');
+  });
+
+  it('still refuses a second verification when there is no deficiency', () => {
+    const r = makeReservation();
+    r.verifyPayment(BILLING, AT);
+    expect(() => r.verifyPayment(SUPERVISOR, AT)).toThrow(BusinessRuleViolationError);
+  });
 });

@@ -24,8 +24,45 @@ const READ_ONLY: readonly Permission[] = ['view'];
  * the transaction."
  */
 const MATRIX: Record<InternalRole, ModuleGrants> = {
-  // "Full system administration ... Full Access to All Modules"
-  IT_ADMINISTRATOR: Object.fromEntries(MODULES.map((m) => [m, FULL])) as ModuleGrants,
+  /**
+   * IT holds the system, NOT the business.
+   *
+   * ── The third place the sources disagree, and the sharpest ──────────────
+   *
+   * RBAC.xls says "Full system administration ... Full Access to All Modules",
+   * and this used to grant exactly that: every module, every permission.
+   *
+   * note.txt overrules it, and is emphatic about which ones go —
+   *   "alisan ng access si IT administrator sa mga: walkin buyers, input
+   *    payment, restrict processing, restrict sales, restrict finance"
+   *   "accessible lang sa maintenance system only, accessible add users only"
+   *
+   * That is the standard segregation-of-duties argument and the client is
+   * right to want it: an administrator who can create the accounts AND verify
+   * the payments AND approve the reservation can move money through the system
+   * alone, and the audit trail would show nothing unusual. Keeping the two
+   * apart is the control.
+   *
+   * So IT keeps only what running the system requires:
+   *   USER_MANAGEMENT — "add users only"
+   *   AUDIT_TRAIL     — read-only. RBAC.xls already assigns IT "audit trail
+   *                     monitoring", and firestore.rules refuses update and
+   *                     delete on it to EVERY role including this one.
+   *
+   * Deliberately NOT granted: DASHBOARD and ANALYTICS. Both report on sales
+   * and collections, which is business data. `/` still renders for IT because
+   * the dashboard link is `always` in the internal menu — they get the landing
+   * page, and the figures on it stay behind the ANALYTICS grant.
+   *
+   * WATCH OUT: `admin` was the account every internal screen was demoed from.
+   * After this it can reach almost none of them, which is the point. Use the
+   * departmental logins instead — jflores (Documentation), cfernandez
+   * (Billing), jramos (Sales).
+   */
+  IT_ADMINISTRATOR: {
+    USER_MANAGEMENT: FULL,
+    AUDIT_TRAIL: READ_PRINT,
+  },
 
   /**
    * The one place the two source documents contradict each other.
@@ -51,14 +88,49 @@ const MATRIX: Record<InternalRole, ModuleGrants> = {
   SALES: {
     UNIT_INVENTORY: READ_PRINT,
     SCHEDULING: ['view', 'print', 'modify'],
+    /*
+     * note.txt: "marerecieved lang ni sales agent kapag verified na lahat sa
+     * billing, documentation, Documentation Supervisor."
+     *
+     * READ_PRINT, and only over reservations that have cleared BOTH desks and
+     * been signed. The module grant cannot express that by itself — it works
+     * per module, not per row — so the row filter lives in two places that
+     * must agree: `SALES_VISIBLE_STATUSES` in the entity, which the Sales
+     * screen queries on, and the /reservations read rule in firestore.rules.
+     *
+     * `create` was here briefly, for walk-ins. The client moved that to
+     * Documentation — "documentation ang in charge for walk in application" —
+     * which is the safer arrangement anyway: the desk that raises a
+     * reservation is then the desk that checks its ID, and Sales keeps no
+     * write access to a reservation at any point.
+     */
+    RESERVATION_VERIFICATION: READ_PRINT,
   },
 
-  // "In charge in client masterfile (add, delete & update) ... OCR ..."
+  /**
+   * "In charge in client masterfile (add, delete & update) ... OCR ..."
+   *
+   * note.txt splits the approver role three ways — "payment = billing, ID =
+   * documentation, Final approval = Documentation Supervisor" — and the last
+   * of those lands here. APPROVAL_MONITORING is granted so that
+   * `can(actor, 'APPROVAL_MONITORING', 'approve')` passes for a Documentation
+   * SUPERVISOR; `approve` is gated on the supervisor flag, so ordinary
+   * Documentation staff still cannot sign one off.
+   *
+   * The entity refuses regardless unless BOTH halves are verified — this only
+   * decides who is allowed to try.
+   */
   DOCUMENTATION: {
+    /*
+     * Walk-ins land here too — note.txt: "documentation ang in charge for walk
+     * in application". No new grant was needed: RESERVATION_VERIFICATION is
+     * already FULL for this role, and FULL includes `create`.
+     */
     DOCUMENTARY_REQUIREMENTS: FULL,
     OCR_VALIDATION: FULL,
     RESERVATION_VERIFICATION: FULL,
     CLIENT_PROFILE: FULL,
+    APPROVAL_MONITORING: FULL,
   },
 
   // "Monitor Account due for application ... View & Print Report"
@@ -67,10 +139,21 @@ const MATRIX: Record<InternalRole, ModuleGrants> = {
     PAYMENT_MONITORING: READ_PRINT,
   },
 
-  // "Generate SOA, Apply payment ... Create, modify, delete, view, sending"
+  /**
+   * "Generate SOA, Apply payment ... Create, modify, delete, view, sending"
+   *
+   * note.txt gives Billing the payment half of the verification — "payment =
+   * billing" — which it could not previously reach at all: RESERVATION_
+   * VERIFICATION belonged to Documentation alone, so the desk that confirms
+   * the fee had no grant over the record it was confirming.
+   *
+   * `modify`, not FULL. Billing clears a payment on a reservation; it does not
+   * create or delete one.
+   */
   BILLING: {
     SOA_GENERATION: FULL,
     PAYMENT_TERM_MONITORING: FULL,
+    RESERVATION_VERIFICATION: ['view', 'modify', 'print'],
   },
 
   // "View dashboards, monitor reservations ... and approve reservation
@@ -79,7 +162,10 @@ const MATRIX: Record<InternalRole, ModuleGrants> = {
     DASHBOARD: FULL,
     REPORTS: FULL,
     ANALYTICS: FULL,
-    APPROVAL_MONITORING: FULL,
+    // MONITORING, as the module is named. note.txt moves the signature itself
+    // to the Documentation Supervisor, so this is now read-only: Account
+    // Receivables watches the approval queue without being able to sign it.
+    APPROVAL_MONITORING: READ_PRINT,
     UNIT_INVENTORY: READ_PRINT,
     PAYMENT_MONITORING: READ_PRINT,
     AUDIT_TRAIL: READ_PRINT,
@@ -160,9 +246,23 @@ export interface InternalActor {
  * counted as a control (§3.3, Defence in Depth).
  */
 export function can(actor: InternalActor, module: Module, permission: Permission): boolean {
-  // Approval is a supervisor act regardless of module, per the sheet's note.
+  /*
+   * Approval is a supervisor act regardless of module, per the sheet's note.
+   *
+   * It also requires a grant the role could ACT on. This used to accept any
+   * grant at all — `grantsFor(...).length > 0` — which was harmless while
+   * every holder of a module held it fully, and stopped being harmless the
+   * moment note.txt moved final approval to the Documentation Supervisor and
+   * left Account Receivables watching the same queue read-only. Under the old
+   * test, an AR supervisor with view-and-print could still approve, because
+   * "has some grant" and "may change something" were being treated as one
+   * question.
+   *
+   * `modify` is that question. A role that cannot modify a record has no
+   * business signing it off.
+   */
   if (permission === 'approve') {
-    return actor.isSupervisor && grantsFor(actor.role, module).length > 0;
+    return actor.isSupervisor && grantsFor(actor.role, module).includes('modify');
   }
   return grantsFor(actor.role, module).includes(permission);
 }

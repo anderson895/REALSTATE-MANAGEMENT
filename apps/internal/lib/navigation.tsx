@@ -1,4 +1,6 @@
 import {
+  BadgeCheck,
+  FlaskConical,
   Banknote,
   Building2,
   CalendarClock,
@@ -10,9 +12,9 @@ import {
   LayoutDashboard,
   Megaphone,
   Receipt,
-  ScanLine,
   Settings2,
   ShieldCheck,
+  UserPlus,
   Users,
   UsersRound,
   Wallet,
@@ -45,6 +47,23 @@ interface ModuleRoute {
   readonly label: string;
   readonly group: string;
   readonly icon: LucideIcon;
+  /**
+   * Narrows a route to specific roles, on top of the module grant.
+   *
+   * Needed because two screens now sit behind RESERVATION_VERIFICATION and
+   * mean different things: Documentation and Billing get the verification
+   * queue, Sales gets the closed sales that came out of it. Without this the
+   * module alone would show each of them both.
+   */
+  readonly roles?: readonly InternalRole[];
+  /**
+   * Shown only in `next dev`.
+   *
+   * The page behind it 404s in a production build, and a menu item pointing at
+   * a 404 is worse than no menu item. Written as a literal comparison at the
+   * filter below so the bundler can fold it away.
+   */
+  readonly devOnly?: boolean;
   /**
    * Shown to every role, whatever the matrix says about `module`.
    *
@@ -90,6 +109,37 @@ const ROUTES: readonly ModuleRoute[] = [
     label: 'Reservations',
     group: 'Processing',
     icon: ClipboardCheck,
+    // The verification queue. Sales holds the module but must not see this —
+    // it is the half-finished work note.txt keeps from them.
+    roles: ['DOCUMENTATION', 'BILLING'],
+  },
+  {
+    module: 'RESERVATION_VERIFICATION',
+    href: '/sales/reservations',
+    label: 'My Sales',
+    group: 'Sales',
+    icon: BadgeCheck,
+    roles: ['SALES'],
+  },
+  /*
+   * The walk-in counter.
+   *
+   * note.txt: "Add walking reservation on internal same process sa web portal",
+   * then "documentation ang in charge for walk in application".
+   *
+   * `roles` narrows it to Documentation, but the real gate is the `create`
+   * permission the page and every action re-check: Billing holds this module
+   * with view/modify/print and Sales with view/print, so neither can raise one
+   * even if they reached the URL. The role list keeps the link out of their
+   * sidebar; the grant is what refuses them.
+   */
+  {
+    module: 'RESERVATION_VERIFICATION',
+    href: '/walk-in',
+    label: 'Walk-in Reservation',
+    group: 'Processing',
+    icon: UserPlus,
+    roles: ['DOCUMENTATION'],
   },
   {
     module: 'APPROVAL_MONITORING',
@@ -105,8 +155,31 @@ const ROUTES: readonly ModuleRoute[] = [
     group: 'Processing',
     icon: FileCheck2,
   },
-  { module: 'OCR_VALIDATION', href: '/documents/ocr', label: 'OCR Validation', group: 'Processing', icon: ScanLine },
-  { module: 'CLIENT_PROFILE', href: '/clients', label: 'Client Profiles', group: 'Processing', icon: UsersRound },
+  /*
+   * OCR Validation is deliberately not in this menu.
+   *
+   * Removed on the client's instruction ("alisin nadin ang OCR VALIDATION sa
+   * internal"). It pointed at /documents/ocr, which was never built, so the
+   * only thing it ever did was offer a link that 404s.
+   *
+   * The OCR_VALIDATION module stays in the RBAC matrix because it is a row in
+   * RBAC.xls, and dropping it there would mean re-transcribing the workbook to
+   * remove a menu item. Nothing reads the grant now.
+   *
+   * NOT to be confused with the buyer-side ID check, which is untouched and
+   * still runs: apps/portal/.../use-id-check.ts validates an uploaded ID
+   * against `validateIdUpload` in @sfsr/domain as the buyer submits it.
+   */
+  // "Clients profiles change to Client Master Files" (note.txt). The MODULE
+  // key stays CLIENT_PROFILE — that is the name in RBAC.xls, and renaming it
+  // would mean re-transcribing the matrix to change a label on a menu.
+  {
+    module: 'CLIENT_PROFILE',
+    href: '/clients',
+    label: 'Client Master Files',
+    group: 'Processing',
+    icon: UsersRound,
+  },
 
   { module: 'SOA_GENERATION', href: '/billing/soa', label: 'Statements of Account', group: 'Finance', icon: FileSpreadsheet },
   {
@@ -137,6 +210,19 @@ const ROUTES: readonly ModuleRoute[] = [
   { module: 'REPORTS', href: '/reports', label: 'Reports', group: 'Administration', icon: FileBarChart },
   { module: 'AUDIT_TRAIL', href: '/audit', label: 'Audit Trail', group: 'Administration', icon: History },
   { module: 'USER_MANAGEMENT', href: '/admin/users', label: 'Users & Roles', group: 'Administration', icon: Users },
+  /*
+   * note.txt leaves IT with maintenance and adding users. This is the
+   * maintenance half — clearing reservation data during development, with the
+   * unit holds, payments, documents and counter that go with it.
+   */
+  {
+    module: 'USER_MANAGEMENT',
+    href: '/admin/maintenance',
+    label: 'Maintenance',
+    group: 'Administration',
+    icon: FlaskConical,
+    devOnly: true,
+  },
 ];
 
 const GROUP_ORDER = ['Overview', 'Sales', 'Processing', 'Finance', 'Administration'] as const;
@@ -187,7 +273,13 @@ export function departmentFor(role: InternalRole): string {
 
 export function navigationFor(role: InternalRole): NavSection[] {
   const granted = new Set<Module>(modulesFor(role));
-  const visible = ROUTES.filter((r) => r.always || granted.has(r.module));
+  const isDev = process.env.NODE_ENV === 'development';
+  const visible = ROUTES.filter(
+    (r) =>
+      (r.always || granted.has(r.module)) &&
+      (!r.roles || r.roles.includes(role)) &&
+      (!r.devOnly || isDev),
+  );
 
   return GROUP_ORDER.map((group) => {
     const GroupIcon = GROUP_ICONS[group];

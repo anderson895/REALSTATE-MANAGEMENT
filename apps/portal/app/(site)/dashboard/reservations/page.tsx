@@ -1,10 +1,10 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { Money, canRequestWithdrawal } from '@sfsr/domain';
+import { Money } from '@sfsr/domain';
 import { getAdminFirestore } from '@sfsr/infrastructure/server';
 import { Card, EmptyState, PageHeader, StatusBadge } from '@sfsr/ui';
 import { requireClient } from '@/lib/session';
-import { WithdrawButton } from './withdraw-button';
+import { DeficiencyResponse } from './deficiency-response';
 
 export const metadata: Metadata = { title: 'My Reservations' };
 
@@ -17,7 +17,18 @@ interface ReservationRow {
   readonly status: string;
   readonly reservedAt: Date | null;
   readonly downPaymentTier: number;
-  readonly withdrawalRequestedAt: Date | null;
+  /** Set when the buyer sends a correction back. Drives the receipt panel. */
+  readonly deficiencyRespondedAt: Date | null;
+  /**
+   * What a reviewer actually wrote, and by when it must be fixed.
+   *
+   * The status alone said "Something needs correcting" and stopped there, so a
+   * buyer had 24 hours to guess WHICH thing. The internal form that captures
+   * this is labelled "The buyer sees this and has 24 hours to respond" — it
+   * was not being shown to them at all.
+   */
+  readonly deficiencyReason: string | null;
+  readonly deficiencyDueAt: Date | null;
 }
 
 /** How each workflow status reads to a buyer, who should not see internal jargon. */
@@ -45,7 +56,9 @@ const BUYER_STATUS: Record<string, { label: string; detail: string }> = {
   Completed: { label: 'Completed', detail: 'Your Permanent Client Account is active.' },
   DeficiencyNoted: {
     label: 'Action Required',
-    detail: 'Something needs correcting. You have 24 hours from the notice to respond.',
+    // The specifics come from `deficiencyReason` on the record itself, shown
+    // in the panel below the card. This line only sets the scene.
+    detail: 'Our team found something that needs correcting before we can continue.',
   },
   Expired: {
     label: 'Expired',
@@ -75,7 +88,9 @@ export default async function MyReservationsPage() {
       status: String(data.status ?? ''),
       reservedAt: data.reservedAt?.toDate?.() ?? null,
       downPaymentTier: Number(data.downPaymentTier ?? 0),
-      withdrawalRequestedAt: data.withdrawalRequestedAt?.toDate?.() ?? null,
+      deficiencyRespondedAt: data.deficiencyRespondedAt?.toDate?.() ?? null,
+      deficiencyReason: data.deficiencyReason ? String(data.deficiencyReason) : null,
+      deficiencyDueAt: data.deficiencyDueAt?.toDate?.() ?? null,
     };
   });
 
@@ -146,31 +161,40 @@ export default async function MyReservationsPage() {
                   </div>
                 </dl>
 
-                {reservation.withdrawalRequestedAt ? (
-                  <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3.5 py-3">
-                    <p className="text-sm font-medium text-amber-900">
-                      Withdrawal requested{' '}
-                      {reservation.withdrawalRequestedAt.toLocaleDateString('en-PH', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </p>
-                    <p className="mt-1 text-sm text-amber-800">
-                      Our team will contact you. Until then the reservation continues through its
-                      normal review, and your{' '}
-                      {Money.fromCentavos(RESERVATION_FEE_CENTAVOS).format()} fee remains
-                      non-refundable.
-                    </p>
-                  </div>
-                ) : canRequestWithdrawal(reservation.status) ? (
-                  <div className="mt-4 flex justify-end">
-                    <WithdrawButton
+                {/*
+                  * The actual deficiency, in the reviewer's own words.
+                  *
+                  * Amber and above the withdrawal notice because it is the one
+                  * thing on this page the buyer has to ACT on, and the clock is
+                  * running. The deadline is spelled out with a time, not "24
+                  * hours" — a buyer reading this at 11pm needs to know whether
+                  * that means tonight or tomorrow.
+                  */}
+                {reservation.status === 'DeficiencyNoted' && reservation.deficiencyReason ? (
+                  <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-3.5 py-3">
+                    <p className="text-sm font-semibold text-amber-900">What needs correcting</p>
+                    <p className="mt-1 text-sm text-amber-900">{reservation.deficiencyReason}</p>
+                    {reservation.deficiencyDueAt ? (
+                      <p className="mt-2 text-xs text-amber-800">
+                        Please respond by{' '}
+                        <span className="font-semibold">
+                          {reservation.deficiencyDueAt.toLocaleString('en-PH', {
+                            dateStyle: 'medium',
+                            timeStyle: 'short',
+                            timeZone: 'Asia/Manila',
+                          })}
+                        </span>
+                        .
+                      </p>
+                    ) : null}
+
+                    <DeficiencyResponse
                       reservationNumber={reservation.number}
-                      reservationFeeCentavos={RESERVATION_FEE_CENTAVOS}
+                      respondedAt={reservation.deficiencyRespondedAt}
                     />
                   </div>
                 ) : null}
+
               </Card>
             );
           })}

@@ -9,14 +9,14 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
-import { can, type InternalActor } from '@sfsr/domain';
+import { type InternalActor } from '@sfsr/domain';
 import type {
   ClientMasterfileRow,
   DocumentQueueRow,
   StatusByProject,
 } from '@sfsr/infrastructure/server';
 import { cn } from '@sfsr/ui';
-import { ACTION_LABELS, actionsFor, formatDate, moduleFor } from '@/lib/reservations';
+import { ACTION_LABELS, actionsFor, canTakeAction, formatDate } from '@/lib/reservations';
 import {
   SUMMARY_CARDS,
   documentStatusTone,
@@ -396,9 +396,9 @@ function QueueRow({ row, actor }: { row: DocumentQueueRow; actor: InternalActor 
   // The one step this row will accept next, and that this employee may take.
   // `noteDeficiency` is filtered out — it needs a written reason, so it is a
   // link to the record rather than a button here.
-  const next = actionsFor(row.status)
+  const next = actionsFor(row)
     .filter((action) => action !== 'noteDeficiency')
-    .filter((action) => can(actor, moduleFor(action), action === 'approve' ? 'approve' : 'modify'));
+    .filter((action) => canTakeAction(actor, action));
 
   return (
     <tr className="align-top transition-colors hover:bg-navy-50/60">

@@ -32,6 +32,26 @@ export function proxy(request: NextRequest): NextResponse {
 
   const session = request.cookies.get(SESSION_COOKIE);
   if (!session?.value) {
+    /*
+     * An API route gets a 401, not a redirect to the sign-in page.
+     *
+     * Everything here is gated, `/api/auth` aside, so a `fetch()` whose
+     * session had expired was answered with a 307 to /login — which fetch
+     * follows, returning the login page's HTML with a 200. The caller then
+     * ran `res.json()` on it and reported `Unexpected token '<'`, which says
+     * nothing about the actual problem.
+     *
+     * The Portal never hit this because its proxy leaves /api ungated and each
+     * route answers for itself. This app gates first, so the gate has to
+     * answer in the language the caller is speaking.
+     */
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json(
+        { error: 'Your session has expired. Please sign in again.' },
+        { status: 401 },
+      );
+    }
+
     const login = new URL('/login', request.url);
     login.searchParams.set('next', pathname);
     return NextResponse.redirect(login);

@@ -48,6 +48,40 @@ export interface ReservationRow {
   readonly downPaymentTier: DownPaymentTier;
   readonly paymentTerm: PaymentTerm;
   readonly financingOption: FinancingOption;
+  /**
+   * The verification trail — note.txt: "ilologs kung sinong staff ang nag
+   * verify, at kung sinong super visor ang nag approve."
+   *
+   * Employee IDs, not names. Resolving them is a separate lookup because one
+   * screen shows a handful of rows and another shows one record, and joining
+   * per row would cost a read each.
+   */
+  readonly paymentVerifiedBy: string | null;
+  readonly paymentVerifiedAt: string | null;
+  readonly documentsVerifiedBy: string | null;
+  readonly documentsVerifiedAt: string | null;
+  readonly approvedBy: string | null;
+  readonly approvedAt: string | null;
+  /**
+   * Which channel the reservation came in through.
+   *
+   * note.txt asks the Client Master Files screen for "Approved Reservation
+   * from (Internal and Portal)" — so the two have to be distinguishable, and
+   * nothing on the record distinguished them.
+   *
+   * Everything written before this field existed came from the Portal, because
+   * that was the only way in; `toRow` defaults accordingly rather than showing
+   * "unknown" for records whose origin is not actually in doubt.
+   */
+  readonly source: 'Portal' | 'Internal';
+  /**
+   * When the buyer sent a correction back against a deficiency.
+   *
+   * Without it a reviewer has no signal that anything changed: the status
+   * stays `DeficiencyNoted` until a desk re-verifies, so a corrected ID would
+   * sit in the queue looking identical to one nobody had answered.
+   */
+  readonly deficiencyRespondedAt: string | null;
 }
 
 export interface ReservationBuyer {
@@ -67,12 +101,30 @@ export interface ReservationPayment {
   readonly receipt: UploadedFileRef | null;
 }
 
+/**
+ * What the automated ID check concluded, when it ran.
+ *
+ * A HINT for the reviewer, never a control — it is computed in the buyer's
+ * browser and stored as submitted. What it buys is that Documentation opens
+ * the record already knowing whether the name on the card matched the account,
+ * instead of the system having checked and then said nothing.
+ */
+export interface DocumentNameCheck {
+  readonly verdict: 'match' | 'review' | 'mismatch';
+  readonly similarity: number;
+  readonly registeredName: string;
+  readonly readName: string;
+}
+
 export interface ReservationDocument {
   readonly docType: string;
   readonly idType: string | null;
   readonly status: string;
   readonly frontFile: UploadedFileRef | null;
   readonly backFile: UploadedFileRef | null;
+  readonly nameCheck: DocumentNameCheck | null;
+  /** Set when the buyer sent this in answer to a deficiency notice. */
+  readonly replacesDeficiency: string | null;
 }
 
 export interface ReservationDetail {
@@ -91,6 +143,21 @@ function toIso(value: unknown): string | null {
 
 function toText(value: unknown): string | null {
   return value == null || value === '' ? null : String(value);
+}
+
+/** Reads back the stored check, refusing anything it does not recognise. */
+function toNameCheck(value: unknown): DocumentNameCheck | null {
+  if (value == null || typeof value !== 'object') return null;
+  const raw = value as DocumentData;
+  const verdict = String(raw.verdict ?? '');
+  if (verdict !== 'match' && verdict !== 'review' && verdict !== 'mismatch') return null;
+
+  return {
+    verdict,
+    similarity: Number(raw.similarity ?? 0),
+    registeredName: String(raw.registeredName ?? ''),
+    readName: String(raw.readName ?? ''),
+  };
 }
 
 function toFileRef(value: unknown): UploadedFileRef | null {
@@ -120,6 +187,14 @@ function toRow(id: string, raw: DocumentData): ReservationRow {
     downPaymentTier: Number(raw.downPaymentTier) as DownPaymentTier,
     paymentTerm: raw.paymentTerm as PaymentTerm,
     financingOption: raw.financingOption as FinancingOption,
+    paymentVerifiedBy: toText(raw.paymentVerifiedBy),
+    paymentVerifiedAt: toIso(raw.paymentVerifiedAt),
+    documentsVerifiedBy: toText(raw.documentsVerifiedBy),
+    documentsVerifiedAt: toIso(raw.documentsVerifiedAt),
+    approvedBy: toText(raw.approvedBy),
+    approvedAt: toIso(raw.approvedAt),
+    source: raw.source === 'Internal' ? 'Internal' : 'Portal',
+    deficiencyRespondedAt: toIso(raw.deficiencyRespondedAt),
   };
 }
 
@@ -256,7 +331,37 @@ export async function getReservationDetail(
         status: String(data.status ?? ''),
         frontFile: toFileRef(data.frontFile),
         backFile: toFileRef(data.backFile),
+        nameCheck: toNameCheck(data.nameCheck),
+        replacesDeficiency: toText(data.replacesDeficiency),
       };
     }),
   };
+}
+
+
+/**
+ * Employee id -> full name, for the verification trail.
+ *
+ * COST: one `getAll` round trip for the whole set, not a read per row. The
+ * ids are de-duplicated first: a reservation verified and approved inside one
+ * department repeats the same person two or three times.
+ *
+ * A missing employee falls back to their id at the call site rather than
+ * being dropped — "EMP014" is a poor label but it is the truth, and hiding it
+ * would make a deleted account look like nobody verified anything.
+ */
+export async function resolveEmployeeNames(
+  db: Firestore,
+  ids: readonly (string | null)[],
+): Promise<Map<string, string>> {
+  const wanted = [...new Set(ids.filter((id): id is string => !!id && id.trim() !== ''))];
+  const names = new Map<string, string>();
+  if (wanted.length === 0) return names;
+
+  const snaps = await db.getAll(...wanted.map((id) => db.collection('employees').doc(id)));
+  for (const snap of snaps) {
+    const data = snap.data();
+    if (snap.exists && data?.fullName) names.set(snap.id, String(data.fullName));
+  }
+  return names;
 }

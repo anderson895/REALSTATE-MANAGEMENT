@@ -6,13 +6,17 @@ import {
   getAdminFirestore,
   getClientMasterfile,
   listDocumentQueue,
+  listPaymentQueue,
   listProjects,
+  sumCollectedCentavos,
   searchClients,
 } from '@sfsr/infrastructure/server';
 import { Card, StatusBadge } from '@sfsr/ui';
 import { requireEmployee, toActor } from '@/lib/session';
 import { getAnalytics } from '@/lib/analytics';
 import { DOCUMENT_QUEUE_STATUSES, SUMMARY_CARDS } from '@/lib/documentation';
+import { BILLING_CARDS, PAYMENT_QUEUE_STATUSES } from '@/lib/billing';
+import { BillingDashboard } from './billing-dashboard';
 import { DocumentationDashboard } from './documentation-dashboard';
 import {
   InventoryDonut,
@@ -69,6 +73,10 @@ export default async function DashboardPage({
     );
   }
 
+  if (session.role === 'BILLING') {
+    return <BillingView />;
+  }
+
   const data = await getAnalytics();
   const showCharts = canAccessModule(toActor(session), 'ANALYTICS');
   const modules = modulesFor(session.role);
@@ -82,8 +90,13 @@ export default async function DashboardPage({
           Welcome back, {session.displayName.split(' ')[0]}
         </h1>
         <p className="mt-1 text-sm text-neutral-500">
-          {ROLE_LABELS[session.role]}
-          {session.isSupervisor ? ' · Approver' : ''} · {session.employeeId} · {modules.length}{' '}
+          {/* Rank always, both ways round. This read "· Approver" or nothing
+              at all, so staff were never told their rank — and "Approver" now
+              overstates it: a Billing supervisor holds the flag but approves
+              no reservations. The rank is the fact; what it grants differs by
+              desk and is spelled out on the profile page. */}
+          {ROLE_LABELS[session.role]} · {session.isSupervisor ? 'Supervisor' : 'Staff'} ·{' '}
+          {session.employeeId} · {modules.length}{' '}
           module{modules.length === 1 ? '' : 's'} available to this role.
         </p>
       </header>
@@ -334,3 +347,52 @@ async function DocumentationView({
  * with the query that fetched those five.
  */
 const QUEUE_PAGE_SIZE = 10;
+
+/**
+ * The Billing Section's landing screen.
+ *
+ * COST: one count() per (card status x project) — 30 for six cards and five
+ * projects — plus the queue join and one bounded pass for the collections
+ * total. Flat: nothing here grows with the reservation collection.
+ *
+ * Uncached, like the Documentation queue. A clerk who has just cleared a
+ * payment must not find the row still sitting here on the way back.
+ */
+async function BillingView() {
+  const db = getAdminFirestore();
+  const session = await requireEmployee();
+
+  const cardStatuses = BILLING_CARDS.map((c) => c.status).filter((s) => s !== null);
+
+  const projects = await listProjects(db);
+  const projectIds = projects.map((p) => p.id);
+
+  const [byStatusProject, queue, collectedCentavos] = await Promise.all([
+    countReservationsByStatusAndProject(db, cardStatuses, projectIds),
+    listPaymentQueue(db, PAYMENT_QUEUE_STATUSES, 25),
+    sumCollectedCentavos(db),
+  ]);
+
+  return (
+    <div className="mx-auto max-w-7xl px-6 py-8">
+      <header className="mb-7">
+        <h1 className="text-2xl font-bold tracking-tight text-navy-800">
+          Billing Department Dashboard
+        </h1>
+        <div aria-hidden="true" className="mt-2.5 h-0.5 w-16 rounded-full bg-gold-500" />
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-neutral-500">
+          Welcome back, {session.displayName.split(' ')[0]}. Billing operations and collections
+          across all projects.
+        </p>
+      </header>
+
+      <BillingDashboard
+        byStatusProject={byStatusProject}
+        collectedCentavos={collectedCentavos}
+        projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+        queue={queue}
+        actor={toActor(session)}
+      />
+    </div>
+  );
+}

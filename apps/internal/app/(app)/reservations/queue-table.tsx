@@ -1,8 +1,8 @@
 import Link from 'next/link';
-import { can, type InternalActor } from '@sfsr/domain';
+import { type InternalActor } from '@sfsr/domain';
 import type { ReservationRow } from '@sfsr/infrastructure/server';
 import { Card, EmptyState } from '@sfsr/ui';
-import { ACTION_LABELS, actionsFor, formatDate, moduleFor } from '@/lib/reservations';
+import { ACTION_LABELS, actionsFor, canTakeAction, formatDate } from '@/lib/reservations';
 import { processReservation } from './actions';
 import { ReservationBadge } from './status';
 
@@ -23,11 +23,19 @@ function daysWaiting(iso: string | null): number | null {
  * outright — it needs a written reason the buyer will read.
  */
 function quickAction(row: ReservationRow, actor: InternalActor) {
-  const forward = actionsFor(row.status)
+  const forward = actionsFor(row)
     .filter((action) => action !== 'noteDeficiency')
-    .filter((action) =>
-      can(actor, moduleFor(action), action === 'approve' ? 'approve' : 'modify'),
-    );
+    /*
+     * `verifyDocuments` is deliberately NOT offered from the list.
+     *
+     * It carries an attestation — the reviewer confirms they checked the name,
+     * the legibility and the expiry against the uploaded images — and none of
+     * those images are on this screen. A one-click "verify" beside a row is
+     * exactly the habit that attestation exists to prevent, so it sends them
+     * into the record instead, where the warning and the evidence are.
+     */
+    .filter((action) => action !== 'verifyDocuments')
+    .filter((action) => canTakeAction(actor, action));
   return forward.length === 1 ? forward[0] : null;
 }
 
@@ -85,7 +93,7 @@ export function QueueTable({
                 <td className="px-5 py-3">
                   <Link
                     href={`/reservations/${row.number}`}
-                    className="font-medium text-brand-700 hover:underline"
+                    className="font-medium text-navy-700 hover:underline"
                   >
                     {row.number}
                   </Link>
@@ -112,7 +120,7 @@ export function QueueTable({
                         <input type="hidden" name="returnTo" value={returnTo} />
                         <button
                           type="submit"
-                          className="whitespace-nowrap rounded-md bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-700"
+                          className="whitespace-nowrap rounded-md bg-navy-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-navy-700"
                         >
                           {ACTION_LABELS[next]}
                         </button>

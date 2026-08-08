@@ -130,7 +130,7 @@ describe('ReservationWorkflowService', () => {
     await workflow.noteDeficiency(number, 'blurred ID', STAFF, AT);
 
     const withinWindow = new Date(AT.getTime() + 12 * 3_600_000);
-    await expect(workflow.markExpired(number, withinWindow)).rejects.toThrow(
+    await expect(workflow.markExpired(number, STAFF, withinWindow)).rejects.toThrow(
       BusinessRuleViolationError,
     );
   });
@@ -141,7 +141,7 @@ describe('ReservationWorkflowService', () => {
     await workflow.noteDeficiency(number, 'missing TIN', STAFF, AT);
 
     const afterWindow = new Date(AT.getTime() + 25 * 3_600_000);
-    await workflow.markExpired(number, afterWindow);
+    await workflow.markExpired(number, STAFF, afterWindow);
 
     expect((await reservations.findByNumber(number))?.status).toBe('Expired');
     expect((await units.findById(new UnitId('U001')))?.status).toBe('On Hold');
@@ -152,7 +152,7 @@ describe('ReservationWorkflowService', () => {
     await workflow.verifyPayment(number, STAFF, AT);
     await workflow.noteDeficiency(number, 'no documents', STAFF, AT);
     const afterWindow = new Date(AT.getTime() + 25 * 3_600_000);
-    await workflow.markExpired(number, afterWindow);
+    await workflow.markExpired(number, STAFF, afterWindow);
 
     await expect(
       workflow.cancel(number, STAFF, STAFF, 'no documents', afterWindow),

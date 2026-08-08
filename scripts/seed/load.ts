@@ -132,14 +132,48 @@ async function seedSalesOrg(db: Firestore): Promise<void> {
 }
 
 /**
- * Creates the 25 internal accounts.
+ * Creates the internal accounts.
  *
  * The plaintext passwords in RBAC.xls are used ONCE here and never stored.
  * Every account carries `mustChangePassword: true` (Development Plan.md §12.3).
+ *
+ * ── Why there are two fixture files ─────────────────────────────────
+ *
+ * `employees.json` is GENERATED — `npm run seed:extract` rebuilds it from the
+ * personnel sheets in RBAC.xls, so anything written into it by hand disappears
+ * on the next run.
+ *
+ * RBAC.xls has no SALES sheet. It never has: the workbook covers Accounting,
+ * Billing, Cash, Documentation, IT, Legal, Loans and Receivables, and Sales is
+ * simply absent — which is why no sales agent could sign in. note.txt asks for
+ * exactly that: "gawan ng login credentials si sales agent".
+ *
+ * The sheet could not be added programmatically. ACE.OLEDB refuses CREATE
+ * TABLE against legacy .xls, and rewriting the workbook through xlrd/xlwt
+ * produces a file ACE.OLEDB then declines to read at all — which broke the
+ * extract entirely until the backup went back. Adding it needs Excel itself.
+ *
+ * So the sales accounts live in a SECOND, hand-maintained fixture the extract
+ * never touches. This is a stopgap and is meant to be deleted: once a SALES
+ * sheet exists in RBAC.xls, `seed:extract` will emit these four rows into
+ * `employees.json` on its own, and this file and the merge below can go.
  */
 async function seedEmployees(db: Firestore): Promise<void> {
   console.log('\n── Employees ────────────────────────────────────');
-  const employees = load<EmployeeFixture>('employees.json');
+  const generated = load<EmployeeFixture>('employees.json');
+  const sales = load<EmployeeFixture>('employees-sales.json');
+
+  // The generated file wins on a collision, so the day RBAC.xls does carry a
+  // SALES sheet this overlay quietly stops mattering rather than fighting it.
+  const seen = new Set(generated.map((e) => e.username.toLowerCase()));
+  const employees = [
+    ...generated,
+    ...sales.filter((e) => !seen.has(e.username.toLowerCase())),
+  ];
+  console.log(
+    `  ${generated.length} from RBAC.xls + ${employees.length - generated.length} sales overlay`,
+  );
+
   const auth = getAuth();
 
   let created = 0;

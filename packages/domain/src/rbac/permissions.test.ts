@@ -33,11 +33,82 @@ describe('resolveRoleFromSheet — disambiguating Loans Management', () => {
 });
 
 describe('can — grants transcribed from USER ROLE ACCESS', () => {
-  it('gives IT Administrator every module', () => {
+  /**
+   * IT used to hold every module. note.txt takes the business away from it —
+   * "restrict processing, restrict sales, restrict finance ... accessible lang
+   * sa maintenance system only, accessible add users only" — so this asserts
+   * the opposite of what it once did, deliberately.
+   *
+   * An exhaustive sweep rather than a few spot checks, so a module added later
+   * cannot quietly land back in IT's lap.
+   */
+  it('leaves IT Administrator with only user management and the audit trail', () => {
+    const allowed = new Set<string>(['USER_MANAGEMENT', 'AUDIT_TRAIL']);
+
     // Named `mod`, not `module` — the latter shadows the CommonJS global.
     for (const mod of MODULES) {
-      expect(canAccessModule(staff('IT_ADMINISTRATOR'), mod), mod).toBe(true);
+      expect(canAccessModule(staff('IT_ADMINISTRATOR'), mod), mod).toBe(allowed.has(mod));
     }
+  });
+
+  it('does not let IT Administrator touch payments, sales or approvals', () => {
+    const admin = staff('IT_ADMINISTRATOR');
+    expect(can(admin, 'PAYMENT', 'modify')).toBe(false);
+    expect(can(admin, 'PAYMENT_RECORDS', 'create')).toBe(false);
+    expect(can(admin, 'RESERVATION_VERIFICATION', 'modify')).toBe(false);
+    expect(can(admin, 'APPROVAL_MONITORING', 'view')).toBe(false);
+    expect(can(admin, 'SCHEDULING', 'modify')).toBe(false);
+    expect(can(admin, 'CLIENT_PROFILE', 'view')).toBe(false);
+  });
+
+  it('keeps the audit trail readable but never writable, even for IT', () => {
+    const admin = supervisor('IT_ADMINISTRATOR');
+    expect(can(admin, 'AUDIT_TRAIL', 'view')).toBe(true);
+    expect(can(admin, 'AUDIT_TRAIL', 'print')).toBe(true);
+    // Mirrors firestore.rules, which refuses update and delete on auditLogs to
+    // every role: "a log an administrator can rewrite provides no assurance".
+    expect(can(admin, 'AUDIT_TRAIL', 'modify')).toBe(false);
+    expect(can(admin, 'AUDIT_TRAIL', 'delete')).toBe(false);
+  });
+
+  /**
+   * note.txt: "approver hati hatiin ang access — payment = billing, ID =
+   * documentation, Final approval = Documentation Supervisor (maapprove niya
+   * lang final kung approve na ng billing and documentation)."
+   *
+   * This covers WHO may attempt each step. That both halves must be finished
+   * before the signature is a rule of the entity, tested in reservation.test.ts
+   * — the two layers guard different things and neither is sufficient alone.
+   */
+  describe('the three-way approver split', () => {
+    it('lets Billing verify a payment on a reservation', () => {
+      expect(can(staff('BILLING'), 'RESERVATION_VERIFICATION', 'modify')).toBe(true);
+      // The desk clears a payment; it does not open or delete reservations.
+      expect(can(staff('BILLING'), 'RESERVATION_VERIFICATION', 'create')).toBe(false);
+      expect(can(staff('BILLING'), 'RESERVATION_VERIFICATION', 'delete')).toBe(false);
+    });
+
+    it('lets Documentation verify the documentary requirements', () => {
+      expect(can(staff('DOCUMENTATION'), 'RESERVATION_VERIFICATION', 'modify')).toBe(true);
+    });
+
+    it('gives final approval to a Documentation SUPERVISOR only', () => {
+      expect(can(supervisor('DOCUMENTATION'), 'APPROVAL_MONITORING', 'approve')).toBe(true);
+      // Same department, no supervisor flag — `can` refuses on the flag alone.
+      expect(can(staff('DOCUMENTATION'), 'APPROVAL_MONITORING', 'approve')).toBe(false);
+    });
+
+    it('leaves Account Receivables monitoring approvals without signing them', () => {
+      expect(can(supervisor('ACCOUNT_RECEIVABLES'), 'APPROVAL_MONITORING', 'view')).toBe(true);
+      // Was true before note.txt moved the signature to Documentation.
+      expect(can(supervisor('ACCOUNT_RECEIVABLES'), 'APPROVAL_MONITORING', 'approve')).toBe(false);
+    });
+
+    it('does not let Billing sign off its own verification', () => {
+      // The whole point of splitting the approver: the desk that clears the
+      // payment must not also be the one that closes the transaction.
+      expect(can(supervisor('BILLING'), 'APPROVAL_MONITORING', 'approve')).toBe(false);
+    });
   });
 
   it('lets Sales act on scheduling but only look at inventory', () => {
@@ -89,8 +160,25 @@ describe('can — grants transcribed from USER ROLE ACCESS', () => {
 
 describe('can — approval is a supervisor act', () => {
   it('denies approve to staff even inside their own module', () => {
-    expect(can(staff('ACCOUNT_RECEIVABLES'), 'APPROVAL_MONITORING', 'approve')).toBe(false);
-    expect(can(supervisor('ACCOUNT_RECEIVABLES'), 'APPROVAL_MONITORING', 'approve')).toBe(true);
+    expect(can(staff('DOCUMENTATION'), 'APPROVAL_MONITORING', 'approve')).toBe(false);
+    expect(can(supervisor('DOCUMENTATION'), 'APPROVAL_MONITORING', 'approve')).toBe(true);
+  });
+
+  /**
+   * Being a supervisor of a module you can only READ is not enough.
+   *
+   * `can` used to ask only whether the role held the module at all, so an
+   * Account Receivables supervisor could approve on a view-and-print grant.
+   * note.txt moved the signature to Documentation and left AR monitoring, and
+   * that is the case which exposed it.
+   */
+  it('needs a grant the supervisor could act on, not merely look at', () => {
+    expect(can(supervisor('ACCOUNT_RECEIVABLES'), 'APPROVAL_MONITORING', 'view')).toBe(true);
+    expect(can(supervisor('ACCOUNT_RECEIVABLES'), 'APPROVAL_MONITORING', 'approve')).toBe(false);
+
+    // Read-only elsewhere, same rule.
+    expect(can(supervisor('LOAN_OFFICER'), 'PAYMENT_MONITORING', 'view')).toBe(true);
+    expect(can(supervisor('LOAN_OFFICER'), 'PAYMENT_MONITORING', 'approve')).toBe(false);
   });
 
   it('does not let a supervisor approve outside their modules', () => {
@@ -103,7 +191,9 @@ describe('can — approval is a supervisor act', () => {
 describe('can — denial is the default', () => {
   it('denies every module the matrix does not name, for every role', () => {
     for (const role of INTERNAL_ROLES) {
-      if (role === 'IT_ADMINISTRATOR') continue; // has everything by design
+      // IT_ADMINISTRATOR used to be skipped here — "has everything by design".
+      // note.txt took the business modules away from it, so it is now the role
+      // with the MOST denials and belongs in this sweep more than any other.
       const granted = new Set(modulesFor(role));
       const denied = MODULES.filter((m) => !granted.has(m));
 
@@ -147,5 +237,36 @@ describe('clientCan — the three account tiers', () => {
     expect(clientCan('PERMANENT', 'viewOwnPayments')).toBe(true);
     expect(clientCan('PERMANENT', 'reserveUnit')).toBe(true);
     expect(clientCan('PERMANENT', 'receiveAnnouncements')).toBe(true);
+  });
+});
+
+/**
+ * note.txt: "Add walking reservation on internal same process sa web portal",
+ * with walk-in buyers taken away from IT in the same list.
+ */
+describe('walk-in reservations', () => {
+  it('lets Documentation raise one', () => {
+    // "documentation ang in charge for walk in application" — it was briefly
+    // Sales, and moving it here means the desk that raises a reservation is
+    // the desk that checks the ID attached to it.
+    expect(can(staff('DOCUMENTATION'), 'RESERVATION_VERIFICATION', 'create')).toBe(true);
+  });
+
+  it('does not let Sales raise or change one at all', () => {
+    expect(can(staff('SALES'), 'RESERVATION_VERIFICATION', 'create')).toBe(false);
+    expect(can(staff('SALES'), 'RESERVATION_VERIFICATION', 'modify')).toBe(false);
+    expect(can(supervisor('SALES'), 'APPROVAL_MONITORING', 'approve')).toBe(false);
+    // Reading approved sales is all they keep.
+    expect(can(staff('SALES'), 'RESERVATION_VERIFICATION', 'view')).toBe(true);
+  });
+
+  it('keeps it away from IT entirely', () => {
+    expect(can(staff('IT_ADMINISTRATOR'), 'RESERVATION_VERIFICATION', 'create')).toBe(false);
+  });
+
+  it('does not let Billing raise one either', () => {
+    // Billing clears payments; raising the reservation it will then clear
+    // would put both halves in one desk.
+    expect(can(staff('BILLING'), 'RESERVATION_VERIFICATION', 'create')).toBe(false);
   });
 });

@@ -3,7 +3,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import type { ReservationStatus } from '@sfsr/domain';
 
 /**
- * Read side of the Documentation Department dashboard.
+ * Read side of the departmental dashboards — Documentation and Billing.
  *
  * INTERNAL.xls sheet `USER INTERFACE` draws that screen's queue with columns
  * the reservation document does not carry: the BUYER's name, the PROJECT, and
@@ -44,6 +44,13 @@ export interface DocumentQueueRow {
   /** From `documents`. A reservation may have none uploaded yet. */
   readonly documentType: string | null;
   readonly documentStatus: string | null;
+  /**
+   * The two verification tracks, so the queue can offer the step that is
+   * actually outstanding. Status alone cannot say — `PendingPaymentVerification`
+   * means the payment is outstanding and says nothing about the documents.
+   */
+  readonly paymentVerifiedBy: string | null;
+  readonly documentsVerifiedBy: string | null;
 }
 
 function toIso(value: unknown): string | null {
@@ -154,6 +161,8 @@ export async function listDocumentQueue(
       projectName: projectId ? (projectNames.get(projectId) ?? projectId) : '—',
       documentType: toText(document?.docType),
       documentStatus: toText(document?.status),
+      paymentVerifiedBy: toText(raw.paymentVerifiedBy),
+      documentsVerifiedBy: toText(raw.documentsVerifiedBy),
     };
   });
 }
@@ -384,4 +393,246 @@ export async function countReservationsByStatusAndProject(
   });
 
   return out;
+}
+
+
+export interface MasterfileEntry {
+  readonly client: ClientMasterfileRow;
+  readonly reservations: readonly {
+    readonly number: string;
+    readonly unitId: string;
+    readonly projectName: string;
+    readonly status: string;
+    readonly source: 'Portal' | 'Internal';
+    readonly approvedAt: string | null;
+  }[];
+}
+
+/**
+ * The Client Master Files screen — note.txt: "Clients profiles change to
+ * Client Master Files — Approved Reservation from (Internal and Portal)".
+ *
+ * Built from the RESERVATIONS side, not the clients side. A master file exists
+ * because a buyer bought something; listing every registered account and then
+ * asking what each one owns would read the whole client collection to show the
+ * handful with an approved reservation, and would put browsers who never
+ * reserved anything in a file of buyers.
+ *
+ * `source` is carried through untouched so both channels appear in one list
+ * rather than being split into two screens — which is what "(Internal and
+ * Portal)" is asking for.
+ *
+ * COST: one query for the approved reservations, one `getAll` for their
+ * distinct buyers, and one for the project names. Bounded by `limit`.
+ */
+export async function listClientMasterfiles(
+  db: Firestore,
+  approvedStatuses: readonly ReservationStatus[],
+  limit = 50,
+): Promise<MasterfileEntry[]> {
+  if (approvedStatuses.length === 0) return [];
+
+  const snap = await db
+    .collection('reservations')
+    .where('status', 'in', [...approvedStatuses])
+    .limit(limit)
+    .get();
+
+  if (snap.empty) return [];
+
+  const rows = snap.docs.map((doc) => ({ number: doc.id, raw: doc.data() }));
+  const clientIds = [...new Set(rows.map((r) => String(r.raw.clientId ?? '')).filter(Boolean))];
+
+  const [clients, projects] = await Promise.all([
+    fetchAll(db, clientIds.map((id) => db.collection('clients').doc(id))),
+    db.collection('projects').limit(50).get(),
+  ]);
+
+  const projectNames = new Map<string, string>(
+    projects.docs.map((doc) => [doc.id, String(doc.data().name ?? doc.id)]),
+  );
+
+  // One entry per BUYER, with everything they hold underneath — a master file
+  // is about a person, and the same buyer can own more than one unit.
+  const byClient = new Map<string, MasterfileEntry>();
+
+  for (const { number, raw } of rows) {
+    const clientId = String(raw.clientId ?? '');
+    if (!clientId) continue;
+
+    let entry = byClient.get(clientId);
+    if (!entry) {
+      const data = clients.get(clientId);
+      entry = {
+        client: data
+          ? toMasterfile(clientId, data)
+          : // The account is gone but the reservation is not. Showing the id
+            // keeps the file visible instead of dropping a real sale.
+            { id: clientId, name: clientId, username: '', email: '', mobile: null, tier: 'INITIAL' },
+        reservations: [],
+      };
+      byClient.set(clientId, entry);
+    }
+
+    const projectId = toText(raw.projectId);
+    (entry.reservations as MasterfileEntry['reservations'][number][]).push({
+      number,
+      unitId: String(raw.unitId ?? ''),
+      projectName: projectId ? (projectNames.get(projectId) ?? projectId) : '—',
+      status: String(raw.status ?? ''),
+      source: raw.source === 'Internal' ? 'Internal' : 'Portal',
+      approvedAt: toIso(raw.approvedAt),
+    });
+  }
+
+  return [...byClient.values()].sort((a, b) => a.client.name.localeCompare(b.client.name));
+}
+
+
+export interface PaymentQueueRow {
+  readonly number: string;
+  readonly status: ReservationStatus;
+  readonly reservedAt: string | null;
+  readonly buyerName: string;
+  readonly buyerId: string;
+  readonly unitId: string;
+  readonly projectName: string;
+  /** From `payments`. A reservation always has one, but not necessarily yet. */
+  readonly amountCentavos: number;
+  readonly channel: string | null;
+  readonly referenceNumber: string | null;
+  readonly paymentDate: string | null;
+  /** From the reservation, NOT from the payment record — see below. */
+  readonly paymentVerifiedBy: string | null;
+  readonly deficiencyReason: string | null;
+}
+
+/**
+ * The payment verification queue — Billing's desk.
+ *
+ * Mirrors `listDocumentQueue` and joins the same way, against `payments`
+ * instead of `documents`.
+ *
+ * ── Where "verified" comes from, and where it does NOT ────────────────────
+ *
+ * Every record in `payments` reads `status: 'Pending Verification'` for ever.
+ * The Portal writes it at submit and nothing has ever updated it — not the
+ * workflow, not the internal action — so a reservation whose fee Billing
+ * cleared weeks ago still has a payment document claiming otherwise.
+ *
+ * So the payment record supplies the MONEY — amount, channel, reference — and
+ * the reservation supplies whether it was cleared, via `paymentVerifiedBy`.
+ * Counting "pending payments" out of the payments collection would report
+ * every payment ever taken as outstanding.
+ *
+ * COST: one query for the reservations, one `getAll` each for their distinct
+ * units and buyers, one `in` query for the payments, and one for the project
+ * names. Bounded by `limit`.
+ */
+export async function listPaymentQueue(
+  db: Firestore,
+  statuses: readonly ReservationStatus[],
+  limit = 25,
+  page = 1,
+): Promise<PaymentQueueRow[]> {
+  if (statuses.length === 0) return [];
+
+  const capped = Math.min(limit, MAX_DOCUMENT_QUEUE);
+  const snap = await db
+    .collection('reservations')
+    .where('status', 'in', [...statuses])
+    .orderBy('reservedAt', 'asc')
+    .offset(Math.max(0, page - 1) * capped)
+    .limit(capped)
+    .get();
+
+  if (snap.empty) return [];
+
+  const rows = snap.docs.map((doc) => ({ number: doc.id, raw: doc.data() }));
+  const unitIds = [...new Set(rows.map((r) => String(r.raw.unitId ?? '')).filter(Boolean))];
+  const clientIds = [...new Set(rows.map((r) => String(r.raw.clientId ?? '')).filter(Boolean))];
+
+  const [units, clients, projects, payments] = await Promise.all([
+    fetchAll(db, unitIds.map((id) => db.collection('units').doc(id))),
+    fetchAll(db, clientIds.map((id) => db.collection('clients').doc(id))),
+    db.collection('projects').limit(50).get(),
+    fetchPaymentsFor(db, rows.map((r) => r.number)),
+  ]);
+
+  const projectNames = new Map<string, string>(
+    projects.docs.map((doc) => [doc.id, String(doc.data().name ?? doc.id)]),
+  );
+
+  return rows.map(({ number, raw }) => {
+    const unitId = String(raw.unitId ?? '');
+    const projectId = toText(units.get(unitId)?.projectId);
+    const buyerId = String(raw.clientId ?? '');
+    const payment = payments.get(number);
+
+    return {
+      number,
+      status: raw.status as ReservationStatus,
+      reservedAt: toIso(raw.reservedAt),
+      buyerName: fullNameOf(clients.get(buyerId)) ?? buyerId,
+      buyerId,
+      unitId,
+      projectName: projectId ? (projectNames.get(projectId) ?? projectId) : '—',
+      amountCentavos: Number(payment?.amountCentavos ?? 0),
+      channel: toText(payment?.channel),
+      referenceNumber: toText(payment?.referenceNumber),
+      paymentDate: toText(payment?.paymentDate),
+      paymentVerifiedBy: toText(raw.paymentVerifiedBy),
+      deficiencyReason: toText(raw.deficiencyReason),
+    };
+  });
+}
+
+/** The payment attached to each reservation. Chunked at the `in` ceiling. */
+async function fetchPaymentsFor(
+  db: Firestore,
+  numbers: readonly string[],
+): Promise<Map<string, DocumentData>> {
+  const found = new Map<string, DocumentData>();
+  if (numbers.length === 0) return found;
+
+  const chunks: string[][] = [];
+  for (let i = 0; i < numbers.length; i += IN_CHUNK) chunks.push(numbers.slice(i, i + IN_CHUNK));
+
+  const snaps = await Promise.all(
+    chunks.map((chunk) => db.collection('payments').where('reservationNumber', 'in', chunk).get()),
+  );
+
+  for (const snap of snaps) {
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      const key = String(data.reservationNumber ?? '');
+      if (key && !found.has(key)) found.set(key, data);
+    }
+  }
+  return found;
+}
+
+/**
+ * What has actually been collected, in centavos.
+ *
+ * Sums the payments of reservations whose fee Billing has CLEARED — again from
+ * the reservation, because the payment record's own status never moves. A
+ * total that counted unverified receipts would be a collections figure made of
+ * money nobody has confirmed arriving.
+ *
+ * COST: one query over the cleared reservations plus their payments, bounded.
+ */
+export async function sumCollectedCentavos(db: Firestore, limit = 200): Promise<number> {
+  const snap = await db
+    .collection('reservations')
+    .where('paymentVerifiedBy', '!=', null)
+    .limit(limit)
+    .get();
+
+  if (snap.empty) return 0;
+
+  const payments = await fetchPaymentsFor(db, snap.docs.map((d) => d.id));
+  let total = 0;
+  for (const payment of payments.values()) total += Number(payment.amountCentavos ?? 0);
+  return total;
 }

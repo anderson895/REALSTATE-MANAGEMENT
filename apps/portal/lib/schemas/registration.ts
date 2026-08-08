@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   SEX_OPTIONS,
   isOfLegalAge,
+  MINIMUM_AGE_YEARS,
   normalizeMobile,
   validatePassword,
   validateUsername,
@@ -91,9 +92,10 @@ export const registrationSchema = z
       return Number.isNaN(dob.getTime()) || isOfLegalAge(dob, new Date());
     },
     {
-      // A reservation leads to a Contract to Sell, which a minor cannot
-      // validly enter into. See Development Plan.md §12.32.
-      message: 'You must be at least 18 years old to reserve a unit.',
+      // Interpolated, not spelled out: the threshold moved from 18 to 21 on
+      // the client's instruction (note.txt), and a hard-coded "18" in the
+      // message would have quietly kept telling buyers the old number.
+      message: `You must be at least ${MINIMUM_AGE_YEARS} years old to register.`,
       path: ['dateOfBirth'],
     },
   );

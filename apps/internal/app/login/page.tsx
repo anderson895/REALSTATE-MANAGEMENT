@@ -40,14 +40,17 @@ export const metadata: Metadata = { title: 'Employee Login' };
  *
  * ── Why this screen breaks the app's palette ──────────────────────────────
  *
- * Everything past sign-in is brand green, from `--color-brand-*`. This page is
- * navy and gold, because that is the corporate identity the client drew it in.
- * The two are reconciled at the door: the sidebar takes over the moment you
- * are through, and the divergence is one screen wide.
+ * This page is navy and gold, and so is everything behind it now.
  *
- * The colours are literals rather than theme tokens on purpose. Adding a navy
- * ramp to the shared stylesheet would put a second brand into every component
- * that reads it, for the benefit of a single page.
+ * It used to be the exception: the note here read "everything past sign-in is
+ * brand green ... the divergence is one screen wide". INTERNAL.xls sheet
+ * `USER INTERFACE` then turned out to draw every internal screen in the same
+ * navy and gold, so the door and the rooms match and the green stayed with the
+ * buyer portal, where it belongs.
+ *
+ * The colours below are still literals rather than `--color-navy-*` tokens.
+ * That is now only inertia rather than a reason — this screen predates the
+ * ramp, and swapping them is a safe tidy-up nobody has needed yet.
  *
  * No theme toggle here either. The design is a photograph under a dark wash —
  * there is no light variant of it to switch to.

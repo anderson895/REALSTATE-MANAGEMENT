@@ -62,17 +62,30 @@ export const PERMISSIONS = [
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
-/** Human-readable labels for menus and audit entries. */
+/**
+ * Human-readable labels for menus and audit entries.
+ *
+ * These name the ROLE only — never the rank.
+ *
+ * Four of them read "… Staff" in RBAC.xls, and that word is a rank, not part
+ * of the role: the sheet carries the rank separately in its own `userRole`
+ * column ("Staff" / "Supervisor"), which is what `isSupervisor` is built from.
+ * Holding it in both places meant the two could contradict each other, and
+ * they did — the topbar showed the Documentation SUPERVISOR as
+ * "Documentation Staff · Supervisor", asserting both ranks in one line.
+ *
+ * Rank is displayed beside these, from `isSupervisor`. One fact, one home.
+ */
 export const ROLE_LABELS: Record<InternalRole, string> = {
   IT_ADMINISTRATOR: 'IT Administrator',
   SALES: 'Sales Agent / Broker / Group Head',
-  DOCUMENTATION: 'Documentation Staff',
+  DOCUMENTATION: 'Documentation',
   LOAN_OFFICER: 'Loan Officer',
-  BILLING: 'Billing Staff',
+  BILLING: 'Billing',
   ACCOUNT_RECEIVABLES: 'Account Receivables Officer',
-  ACCOUNTING: 'Accounting Staff',
+  ACCOUNTING: 'Accounting',
   CASH_CLERK: 'Cash Clerk',
-  MARKETING: 'Marketing Staff',
+  MARKETING: 'Marketing',
   LEGAL_COUNSEL: 'Legal Counsel',
 };
 

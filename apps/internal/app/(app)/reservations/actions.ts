@@ -2,9 +2,10 @@
 
 import { revalidatePath, updateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { DomainError, EmployeeId, ReservationNumber, can } from '@sfsr/domain';
+import { DomainError, EmployeeId, ReservationNumber } from '@sfsr/domain';
 import { requireModule, toActor } from '@/lib/session';
 import {
+  canTakeAction,
   isReservationAction,
   moduleFor,
   reservationWorkflow,
@@ -46,9 +47,15 @@ export async function processReservation(formData: FormData): Promise<void> {
   const session = await requireModule(gate);
   const actor = toActor(session);
 
-  // `approve` is granted by the supervisor flag, not by the module row —
-  // "All Supervisor per personnel is the approver of the transaction."
-  if (!can(actor, gate, action === 'approve' ? 'approve' : 'modify')) {
+  /*
+   * Both gates at once: the module grant, and the desk that owns the step.
+   *
+   * `approve` is granted by the supervisor flag rather than the module row —
+   * "All Supervisor per personnel is the approver of the transaction" — and
+   * the two verifications are split between Billing and Documentation, so
+   * neither desk can sign off the other's half. See `canTakeAction`.
+   */
+  if (!canTakeAction(actor, action)) {
     redirect(
       `${returnTo}?error=${encodeURIComponent('Your role cannot perform that action.')}`,
     );
@@ -73,6 +80,11 @@ export async function processReservation(formData: FormData): Promise<void> {
         break;
       case 'noteDeficiency':
         await workflow.noteDeficiency(ref, reason, by, at);
+        break;
+      case 'markExpired':
+        // The workflow re-checks the deadline itself, so a stale screen
+        // offering this button cannot expire a reservation early.
+        await workflow.markExpired(ref, by, at);
         break;
     }
   } catch (cause) {

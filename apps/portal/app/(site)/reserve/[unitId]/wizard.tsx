@@ -221,6 +221,22 @@ export function ReservationWizard({
         idType,
         frontFile: idFrontFile ?? undefined,
         backFile: idBackFile ?? undefined,
+        /*
+         * The name check travels with the upload instead of being discarded.
+         *
+         * It already ran — `next()` will not leave the Documents step without
+         * a verdict — and it is the one thing the system knows about whether
+         * the card names this buyer. Documentation had to re-derive that by
+         * eye; now the answer is on the record beside the images.
+         */
+        nameCheck: idCheck.result?.nameComparison
+          ? {
+              verdict: idCheck.result.nameComparison.verdict,
+              similarity: idCheck.result.nameComparison.similarity,
+              registeredName: idCheck.result.nameComparison.normalizedA,
+              readName: idCheck.result.nameComparison.normalizedB.slice(0, 400),
+            }
+          : undefined,
       },
       acceptedTerms,
       declaredTruthful: declarations.truthful,

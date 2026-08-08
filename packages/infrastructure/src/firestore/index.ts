@@ -30,11 +30,13 @@ export {
   countReservationsByStatus,
   getReservation,
   getReservationDetail,
+  resolveEmployeeNames,
   MAX_RESERVATIONS_PER_QUERY,
   type ReservationRow,
   type ReservationBuyer,
   type ReservationPayment,
   type ReservationDocument,
+  type DocumentNameCheck,
   type ReservationDetail,
   type UploadedFileRef,
 } from './reservation.queries';
@@ -49,13 +51,18 @@ export {
 
 export {
   listDocumentQueue,
+  listPaymentQueue,
+  sumCollectedCentavos,
   getClientMasterfile,
   searchClients,
+  listClientMasterfiles,
   countClients,
   countDocumentQueue,
   countReservationsByStatusAndProject,
   MAX_DOCUMENT_QUEUE,
   type DocumentQueueRow,
+  type PaymentQueueRow,
   type ClientMasterfileRow,
+  type MasterfileEntry,
   type StatusByProject,
 } from './documentation.queries';

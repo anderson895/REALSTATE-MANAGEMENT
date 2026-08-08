@@ -110,6 +110,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       db.collection('reservations').doc(number.value),
       {
         projectId,
+        // Which channel this came in through. A staff-entered walk-in writes
+        // 'Internal'; the Client Master Files screen shows both.
+        source: 'Portal',
         // Buyer details captured at STEP 2, denormalised onto the reservation
         // so the internal review screen reads one document rather than
         // joining back to the client profile.
@@ -164,6 +167,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       // needs to know WHICH side they are looking at.
       frontFile: data.governmentId.frontFile,
       backFile: data.governmentId.backFile,
+      /*
+       * The browser's name check, stored as a HINT for the reviewer.
+       *
+       * Never a control: it arrives from the client and could be anything.
+       * What it buys is that Documentation opens the record already knowing
+       * whether the automated comparison matched, instead of the system having
+       * checked and then said nothing.
+       */
+      nameCheck: data.governmentId.nameCheck ?? null,
       status: 'Pending Validation',
       uploadedBy: session.uid,
       uploadedAt: FieldValue.serverTimestamp(),

@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import {
+  CIVIL_STATUSES,
   DOWN_PAYMENT_TIERS,
   FINANCING_OPTIONS,
   ID_TYPES,
+  PAYMENT_CHANNELS,
   PAYMENT_TERMS,
   normalizeMobile,
 } from '@sfsr/domain';
@@ -24,16 +26,16 @@ export { ID_TYPES };
 
 const required = (label: string) => z.string().trim().min(1, `${label} is required.`);
 
-export const PAYMENT_CHANNELS = [
-  'Bank Deposit',
-  'Online Banking',
-  'GCash',
-  'Maya',
-  'Check',
-  'Cash',
-] as const;
-
-export const CIVIL_STATUSES = ['Single', 'Married', 'Widowed', 'Separated'] as const;
+/**
+ * Re-exported, not declared.
+ *
+ * Both lists now live in the domain beside the reservation entity, because the
+ * walk-in counter needs the SAME ones and lives in the other app. Declaring
+ * them here a second time is how "alisin nadin ang cash at check" gets applied
+ * to one door and quietly not the other. See `PAYMENT_CHANNELS` in
+ * packages/domain/src/entities/reservation.ts for why those two are gone.
+ */
+export { PAYMENT_CHANNELS, CIVIL_STATUSES };
 
 
 const uploadedFile = z.object({
@@ -106,6 +108,34 @@ export const reservationSchema = z.object({
     idType: z.enum(ID_TYPES),
     frontFile: uploadedFile,
     backFile: uploadedFile,
+    /*
+     * What the automated ID check concluded, carried through to the reviewer.
+     *
+     * `validateIdUpload` already runs in the buyer's browser: it refuses the
+     * wrong KIND of card outright, then compares the name it read against the
+     * account name and WARNS on a mismatch without blocking — OCR misreads
+     * names constantly, and "Ma. Cristina" against "Maria Cristina" is not
+     * grounds to turn a real buyer away.
+     *
+     * That verdict was then thrown away. Documentation had no idea whether the
+     * check had passed, so the one thing the system already knew about the
+     * name never reached the person whose job is to check the name.
+     *
+     * Optional, and never trusted: it comes from the browser, so it is a HINT
+     * for the reviewer and not a control. A buyer who forged it would only be
+     * telling a reviewer to look harder at a card the reviewer is looking at
+     * anyway.
+     */
+    nameCheck: z
+      .object({
+        verdict: z.enum(['match', 'review', 'mismatch']),
+        similarity: z.number().min(0).max(1),
+        /** The account name that was compared, as normalised. */
+        registeredName: z.string().trim().max(200),
+        /** What the OCR read, normalised. Empty when nothing usable was read. */
+        readName: z.string().trim().max(400),
+      })
+      .optional(),
   }),
 
   // ── STEP 7 — Terms and Conditions ──

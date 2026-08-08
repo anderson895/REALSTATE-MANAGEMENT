@@ -41,6 +41,10 @@ export function UserMenu({
   const container = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
+  // The two words the client asked for: "idisplay kung supervisor siya or
+  // staff". Derived once here so the bar and the menu cannot disagree.
+  const rank = isSupervisor ? 'Supervisor' : 'Staff';
+
   useEffect(() => {
     if (!open) return;
 
@@ -86,7 +90,21 @@ export function UserMenu({
           <span className="block truncate text-[13px] font-semibold leading-tight text-navy-800">
             {name}
           </span>
-          <span className="block truncate text-[11px] leading-tight text-navy-500">{role}</span>
+          {/*
+           * Department AND rank, on the bar rather than inside the menu.
+           *
+           * Rank stopped being a job title and became the thing that decides
+           * what you may do: a Documentation Supervisor gives the final
+           * approval and is barred from the document check that precedes it,
+           * so their screen is missing a button their colleague has. Reading
+           * "Supervisor" here is the difference between that being the rule
+           * and it being a bug. It was previously a badge shown only to
+           * supervisors, only after clicking — so staff never saw a rank at
+           * all, and nobody saw one without going looking.
+           */}
+          <span className="block truncate text-[11px] leading-tight text-navy-500">
+            {role} · {rank}
+          </span>
         </span>
         <ChevronDown
           aria-hidden="true"
@@ -107,11 +125,21 @@ export function UserMenu({
               <span className="rounded-full bg-navy-50 px-2 py-0.5 text-[10px] font-semibold text-navy-700">
                 {employeeId}
               </span>
-              {isSupervisor ? (
-                <span className="rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-semibold text-gold-900">
-                  Approver
-                </span>
-              ) : null}
+              {/*
+               * Always drawn, both ranks. The badge used to appear only for
+               * supervisors and read "Approver", so an employee seeing no
+               * badge could not tell whether they were staff or whether the
+               * screen had simply not loaded it. An absence is not a label.
+               */}
+              <span
+                className={
+                  isSupervisor
+                    ? 'rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-semibold text-gold-900'
+                    : 'rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-600'
+                }
+              >
+                {rank}
+              </span>
             </div>
           </div>
 

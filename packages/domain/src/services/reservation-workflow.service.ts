@@ -158,7 +158,7 @@ export class ReservationWorkflowService {
    * Does NOT cancel and does NOT release the unit — that needs a human
    * decision with management approval (§8.4).
    */
-  async markExpired(number: ReservationNumber, at: Date): Promise<void> {
+  async markExpired(number: ReservationNumber, by: EmployeeId, at: Date): Promise<void> {
     return this.uow.execute(async (ctx) => {
       const reservation = await this.mustFind(number, ctx);
       if (!reservation.isDeficiencyOverdue(at)) {
@@ -168,7 +168,15 @@ export class ReservationWorkflowService {
       }
       reservation.markExpired(at);
       await this.reservations.save(reservation, ctx);
-      await this.audit.record(reservation.pullEvents(), 'system', ctx);
+      /*
+       * Attributed to the employee, not to 'system'.
+       *
+       * It said 'system' because nothing called this and the eventual caller
+       * was assumed to be a scheduled job. RESERVATION.doc rules that out —
+       * "The system does not automatically cancel expired reservations" — so
+       * a person presses this, and the trail has to name them.
+       */
+      await this.audit.record(reservation.pullEvents(), by.value, ctx);
     });
   }
 

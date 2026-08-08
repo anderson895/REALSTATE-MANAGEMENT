@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { canAccessModule, can } from '@sfsr/domain';
+import { canAccessModule } from '@sfsr/domain';
 import {
   getAdminFirestore,
   getReservationDetail,
+  resolveEmployeeNames,
   signedUrlFor,
+  type ReservationDocument,
   type UploadedFileRef,
 } from '@sfsr/infrastructure/server';
 import { Card, PageHeader } from '@sfsr/ui';
@@ -13,14 +15,18 @@ import { requireEmployee, toActor } from '@/lib/session';
 import {
   ACTION_LABELS,
   actionsFor,
+  canTakeAction,
   formatCentavos,
   formatDate,
-  moduleFor,
+  refusalFor,
   waitingOn,
+  type ReservationAction,
 } from '@/lib/reservations';
 import { processReservation } from '../actions';
+import { ConfirmSubmit } from '../confirm-submit';
 import { ActionNotice } from '../notice';
 import { LifecycleStepper, ReservationBadge } from '../status';
+import { VerificationTrail } from '../trail';
 
 /**
  * One reservation, with the evidence and the decision on the same screen.
@@ -36,6 +42,50 @@ import { LifecycleStepper, ReservationBadge } from '../status';
  * the first would lock the approver out of the record they must approve.
  * Either grant opens the page; each individual action is re-checked on its own.
  */
+/**
+ * What each attestation actually claims.
+ *
+ * Written as the checks a reviewer should have made, not as "are you sure" —
+ * a question that stops being read somewhere around the tenth reservation.
+ * Each list is the thing the person is putting their name to.
+ */
+type ConfirmableAction = Exclude<ReservationAction, 'noteDeficiency'>;
+
+const CONFIRM_COPY: Record<ConfirmableAction, { title: string; points: readonly string[] }> = {
+  verifyPayment: {
+    title: 'Confirm the payment cleared?',
+    points: [
+      'The amount and reference number match the uploaded receipt.',
+      'The payment appears in the company bank account, not just on the receipt.',
+      'This is half of what the final approval rests on.',
+    ],
+  },
+  verifyDocuments: {
+    title: 'Confirm the ID checks out?',
+    points: [
+      'The name on the ID matches the buyer on this reservation.',
+      'Both sides are legible and the ID has not expired.',
+      'The images are of the original, not a photocopy of one.',
+    ],
+  },
+  markExpired: {
+    title: 'Mark this reservation expired?',
+    points: [
+      'The buyer did not respond within 24 hours of the deficiency notice.',
+      'It moves to the Expired Reservation Report. This does NOT cancel it.',
+      'Cancelling is a separate step and needs a second person to approve.',
+    ],
+  },
+  approve: {
+    title: 'Approve this reservation?',
+    points: [
+      'Billing and Documentation have both signed off — check the trail above.',
+      'The unit leaves inventory and is marked Sold the moment you confirm.',
+      'This is the final stage of the transaction.',
+    ],
+  },
+};
+
 export default async function ReservationDetailPage({
   params,
   searchParams,
@@ -67,13 +117,53 @@ export default async function ReservationDetailPage({
 
   const { reservation, buyer, payment, documents } = detail;
 
+  // COST: one getAll for the whole trail — usually one or two distinct people,
+  // and zero reads on a reservation nobody has touched yet.
+  /*
+   * The buyer's registered name, shown beside the ID.
+   *
+   * "dapat match ang ID sa name ng client" — a reviewer cannot check that
+   * against a name they have to remember from another screen. One read.
+   */
+  const buyerSnap = await getAdminFirestore()
+    .collection('clients')
+    .doc(reservation.clientId)
+    .get();
+  const buyerData = buyerSnap.data();
+  const buyerName = buyerData
+    ? [buyerData.firstName, buyerData.middleName, buyerData.lastName, buyerData.suffix]
+        .map((part) => (part == null ? '' : String(part).trim()))
+        .filter((part) => part !== '')
+        .join(' ')
+    : reservation.clientId;
+
+  const names = await resolveEmployeeNames(getAdminFirestore(), [
+    reservation.paymentVerifiedBy,
+    reservation.documentsVerifiedBy,
+    reservation.approvedBy,
+  ]);
+
   // Drawn only for actions this employee may actually take. The same check
   // runs again inside the server action — hiding a button is not a control.
-  const available = actionsFor(reservation.status).filter((action) =>
-    can(actor, moduleFor(action), action === 'approve' ? 'approve' : 'modify'),
+  const offered = actionsFor(reservation);
+  const available = offered.filter((action) => canTakeAction(actor, action));
+  const primary = available.filter(
+    (action): action is ConfirmableAction => action !== 'noteDeficiency',
   );
-  const primary = available.filter((action) => action !== 'noteDeficiency');
-  const waitingFor = waitingOn(reservation.status);
+  const waitingFor = waitingOn(reservation.status, reservation);
+
+  /*
+   * This record needs a check that is this actor's own desk's work, and they
+   * are barred from it only because they are the one who signs it off.
+   *
+   * Worth its own sentence: without it a Documentation Supervisor was told
+   * "Verified on your side. Now with Documentation" — while being Documentation
+   * and having verified nothing. That reads as a broken screen rather than as
+   * the four-eyes rule doing exactly what the client asked for.
+   */
+  const heldForStaff = offered.some(
+    (action) => refusalFor(actor, action) === 'approverMayNotVerify',
+  );
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
@@ -97,6 +187,13 @@ export default async function ReservationDetailPage({
         <LifecycleStepper status={reservation.status} />
       </Card>
 
+      {/* Above the evidence, not below it: a supervisor opening this record is
+          deciding whether to sign, and the first question is whether the other
+          two desks have finished. */}
+      <div className="mb-6">
+        <VerificationTrail reservation={reservation} names={names} />
+      </div>
+
       {reservation.status === 'DeficiencyNoted' ? (
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
           <p className="font-medium">Deficiency noted — waiting on the buyer</p>
@@ -105,6 +202,15 @@ export default async function ReservationDetailPage({
             They have until {formatDate(reservation.deficiencyDueAt)} to respond. After that the
             reservation can be moved to the Expired Reservation Report.
           </p>
+          {/* The buyer coming back does not change the status — only a desk
+              re-verifying does — so without this the corrected file would sit
+              in the queue looking exactly like an unanswered notice. */}
+          {reservation.deficiencyRespondedAt ? (
+            <p className="mt-2 rounded-md bg-emerald-100 px-2.5 py-1.5 text-xs font-medium text-emerald-900">
+              Buyer sent a correction on {formatDate(reservation.deficiencyRespondedAt)} — check
+              the documents below and verify again.
+            </p>
+          ) : null}
         </div>
       ) : null}
 
@@ -145,6 +251,15 @@ export default async function ReservationDetailPage({
                       <p className="text-sm font-medium">{doc.idType ?? doc.docType}</p>
                       <span className="text-xs text-neutral-500">{doc.status}</span>
                     </div>
+
+                    {doc.replacesDeficiency ? (
+                      <p className="mb-3 rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                        Sent by the buyer in answer to: “{doc.replacesDeficiency}”
+                      </p>
+                    ) : null}
+
+                    <NameCheck check={doc.nameCheck} buyerName={buyerName} />
+
                     <div className="grid gap-4 sm:grid-cols-2">
                       <AssetPreview file={doc.frontFile} label="Front" />
                       <AssetPreview file={doc.backFile} label="Back" />
@@ -200,7 +315,14 @@ export default async function ReservationDetailPage({
                     Without this the panel showed a lone "something is wrong"
                     toggle and no hint that the record had moved on to another
                     department. */}
-                {primary.length === 0 && waitingFor ? (
+                {primary.length === 0 && heldForStaff ? (
+                  <p className="text-sm text-neutral-500">
+                    Your signature is the{' '}
+                    <span className="font-medium text-neutral-700">final approval</span>, so the
+                    checks themselves are for staff to make. This comes back to you once
+                    Billing and Documentation have both signed.
+                  </p>
+                ) : primary.length === 0 && waitingFor ? (
                   <p className="text-sm text-neutral-500">
                     Verified on your side. Now with{' '}
                     <span className="font-medium text-neutral-700">
@@ -214,12 +336,13 @@ export default async function ReservationDetailPage({
                   <form key={action} action={processReservation}>
                     <input type="hidden" name="number" value={reservation.number} />
                     <input type="hidden" name="action" value={action} />
-                    <button
-                      type="submit"
-                      className="w-full rounded-md bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-700"
-                    >
-                      {ACTION_LABELS[action]}
-                    </button>
+                    <ConfirmSubmit
+                      label={ACTION_LABELS[action]}
+                      title={CONFIRM_COPY[action].title}
+                      points={CONFIRM_COPY[action].points}
+                      actor={session.displayName}
+                      tone={action === 'approve' ? 'gold' : 'navy'}
+                    />
                   </form>
                 ))}
 
@@ -334,7 +457,7 @@ function AssetPreview({ file, label }: { file: UploadedFileRef | null; label: st
           href={full}
           target="_blank"
           rel="noreferrer"
-          className="shrink-0 text-xs text-brand-700 hover:underline"
+          className="shrink-0 text-xs text-navy-700 hover:underline"
         >
           Full size ↗
         </a>
@@ -356,11 +479,86 @@ function AssetPreview({ file, label }: { file: UploadedFileRef | null; label: st
           href={full}
           target="_blank"
           rel="noreferrer"
-          className="block rounded-md border border-neutral-200 px-4 py-6 text-center text-xs text-brand-700 hover:underline"
+          className="block rounded-md border border-neutral-200 px-4 py-6 text-center text-xs text-navy-700 hover:underline"
         >
           {file.fileName}
         </a>
       )}
     </figure>
+  );
+}
+
+/**
+ * The automated name comparison, next to the card it was run against.
+ *
+ * ── Why a warning and not a block ────────────────────────────────────────
+ *
+ * `validateIdUpload` refuses the wrong KIND of card outright — that is a fact
+ * about a document. Whether the NAME matches is a judgement, and OCR misreads
+ * names constantly: "Ma. Cristina" against "MARIA CRISTINA", a maiden name on
+ * an older card, a middle initial the card omits. Blocking on it would turn
+ * away real buyers holding perfectly good documents.
+ *
+ * So the machine states what it found and the reviewer decides. What changed
+ * is that the finding now reaches them at all — it used to be computed in the
+ * buyer's browser, shown once, and discarded.
+ *
+ * The registered name is printed whether or not the check ran, because the
+ * reviewer's actual job is to compare it with the card in front of them, and a
+ * name they have to remember from another screen is one they will not check.
+ */
+function NameCheck({
+  check,
+  buyerName,
+}: {
+  check: ReservationDocument['nameCheck'];
+  buyerName: string;
+}) {
+  const tone =
+    check?.verdict === 'match'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+      : check?.verdict === 'mismatch'
+        ? 'border-rose-200 bg-rose-50 text-rose-900'
+        : 'border-amber-200 bg-amber-50 text-amber-900';
+
+  return (
+    <div className={`mb-3 rounded-md border px-3 py-2.5 text-xs ${check ? tone : 'border-neutral-200 bg-neutral-50 text-neutral-700'}`}>
+      <p className="font-semibold">
+        {check?.verdict === 'match'
+          ? 'Name matched the account'
+          : check?.verdict === 'mismatch'
+            ? 'Name did NOT match the account'
+            : check?.verdict === 'review'
+              ? 'Name needs a human look'
+              : 'No automated name check on file'}
+      </p>
+
+      <dl className="mt-1.5 space-y-0.5">
+        <div className="flex gap-1.5">
+          <dt className="shrink-0 opacity-70">Account name:</dt>
+          <dd className="font-medium">{buyerName}</dd>
+        </div>
+        {check ? (
+          <>
+            <div className="flex gap-1.5">
+              <dt className="shrink-0 opacity-70">Read from the ID:</dt>
+              <dd className="min-w-0 break-words font-medium">
+                {check.readName.trim() === '' ? '— nothing readable —' : check.readName}
+              </dd>
+            </div>
+            <div className="flex gap-1.5">
+              <dt className="shrink-0 opacity-70">Similarity:</dt>
+              <dd className="tabular font-medium">{Math.round(check.similarity * 100)}%</dd>
+            </div>
+          </>
+        ) : null}
+      </dl>
+
+      <p className="mt-1.5 opacity-80">
+        {check
+          ? 'A guide only — OCR misreads names. Compare the images yourself before verifying.'
+          : 'This reservation predates the check, or it could not run. Compare by eye.'}
+      </p>
+    </div>
   );
 }

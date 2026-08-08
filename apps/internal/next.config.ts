@@ -27,6 +27,12 @@ const nextConfig: NextConfig = {
 
   typedRoutes: true,
 
+  // The dev-only Next.js indicator sits bottom-left by default, directly on
+  // top of the sidebar's "SECURE · EFFICIENT · INTEGRATED" badge — it clipped
+  // the S and made a finished panel look broken. Nothing in the bottom-right
+  // corner of these screens for it to cover.
+  devIndicators: { position: 'bottom-right' },
+
   // This build is served over a trusted LAN, never through a CDN.
   poweredByHeader: false,
 

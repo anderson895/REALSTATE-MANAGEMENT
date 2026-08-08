@@ -109,12 +109,20 @@ export type Sex = (typeof SEX_OPTIONS)[number];
 /**
  * Minimum age to register.
  *
- * NOT stated in RESERVATION.doc, but a reservation leads to a Contract to
- * Sell, and under the Civil Code a minor lacks the capacity to contract.
- * Accepting a 16-year-old's reservation would produce a voidable agreement
- * and a refund dispute over a non-refundable fee. Flagged as §12.32.
+ * Was 18, and inferred rather than given: RESERVATION.doc says nothing about
+ * age, but a reservation leads to a Contract to Sell and under the Civil Code
+ * a minor lacks the capacity to contract, so accepting a 16-year-old's
+ * reservation would produce a voidable agreement and a refund dispute over a
+ * non-refundable fee. Flagged as §12.32.
+ *
+ * note.txt now states it outright — "set age validation for user creation
+ * 21<" — and 21 is stricter than the legal floor, so the inference and the
+ * instruction do not conflict; the client's number simply wins.
+ *
+ * Anything that shows this to a buyer should interpolate the constant rather
+ * than spell the number out, or the two drift the next time it moves.
  */
-export const MINIMUM_AGE_YEARS = 18;
+export const MINIMUM_AGE_YEARS = 21;
 
 export function ageOn(dateOfBirth: Date, asOf: Date): number {
   let age = asOf.getFullYear() - dateOfBirth.getFullYear();
