@@ -223,8 +223,25 @@ It runs on an office LAN server and is never exposed publicly:
 
 ```bash
 npm run build:internal
-npm run start:internal        # binds 0.0.0.0:3001
+npm run start:internal        # binds 0.0.0.0:3001 — reachable across the LAN
 ```
+
+To run it on one machine and nothing else — a demo, or a laptop that happens to
+be on a café network — double-click **`run-internal.bat`**, or:
+
+```bash
+npm run start:internal:local  # binds 127.0.0.1:3001 — this machine only
+```
+
+The two differ only in the bind address, and that difference is the entire
+point: `0.0.0.0` accepts connections from anything that can route to the host,
+`127.0.0.1` accepts none. The internal system has no business being reachable
+from a network it did not expect, so the launcher deliberately uses the second.
+
+`run-internal.bat` wraps that script with the checks a non-developer would
+otherwise hit as a stack trace: Node present, `.env.local` present, dependencies
+installed, and a production build available — building one only if
+`apps/internal/.next` is missing, or if passed `--rebuild`.
 
 ---
 

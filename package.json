@@ -13,6 +13,7 @@
     "build:portal": "npm run build --workspace @sfsr/portal",
     "build:internal": "npm run build --workspace @sfsr/internal",
     "start:internal": "npm run start --workspace @sfsr/internal",
+    "start:internal:local": "npm run start:local --workspace @sfsr/internal",
     "lint": "eslint .",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
