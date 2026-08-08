@@ -36,5 +36,9 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3"
   },
-  "comment:devDependencies": "typescript and the @types packages are declared HERE as well as at the workspace root, and must be kept in step with it. `next build` needs them for its TypeScript step. Locally that never showed: npm workspaces hoist them into the root node_modules, and a build invoked from the repo root resolves them by walking up. A Vercel deployment whose Root Directory is apps/portal installs only THIS workspace, finds no typescript, and fails with 'It looks like you're trying to use TypeScript but do not have the required package(s) installed'. Declaring them makes the app buildable on its own, whichever directory the build runs from."
+  "comment:devDependencies": "typescript and the @types packages are declared HERE as well as at the workspace root, and must be kept in step with it. `next build` needs them for its TypeScript step. Locally that never showed: npm workspaces hoist them into the root node_modules, and a build invoked from the repo root resolves them by walking up. A Vercel deployment whose Root Directory is apps/portal installs only THIS workspace, finds no typescript, and fails with 'It looks like you're trying to use TypeScript but do not have the required package(s) installed'. Declaring them makes the app buildable on its own, whichever directory the build runs from.",
+  "engines": {
+    "node": "22.x"
+  },
+  "comment:engines": "Vercel reads engines.node from the package.json at its Root Directory, which for the portal is THIS file — not the workspace root. Node 22 is required because firebase-admin -> jwks-rsa requires a runtime that can require() an ES module; see the note at the repository root."
 }

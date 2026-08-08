@@ -38,5 +38,9 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3"
   },
-  "comment:devDependencies": "Same as the portal, and for the same reason — see the note there. This app is not deployed to Vercel, but a build run from apps/internal on a machine that installed only this workspace fails identically, and the two apps giving different answers to the same question is how one of them quietly stops building."
+  "comment:devDependencies": "Same as the portal, and for the same reason — see the note there. This app is not deployed to Vercel, but a build run from apps/internal on a machine that installed only this workspace fails identically, and the two apps giving different answers to the same question is how one of them quietly stops building.",
+  "engines": {
+    "node": "22.x"
+  },
+  "comment:engines": "Matches the workspace root. Node 22 is required because firebase-admin -> jwks-rsa requires a runtime that can require() an ES module; see the note at the repository root."
 }
