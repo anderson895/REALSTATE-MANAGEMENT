@@ -37,6 +37,10 @@
     "typescript": "^6.0.3"
   },
   "comment:devDependencies": "typescript and the @types packages are declared HERE as well as at the workspace root, and must be kept in step with it. `next build` needs them for its TypeScript step. Locally that never showed: npm workspaces hoist them into the root node_modules, and a build invoked from the repo root resolves them by walking up. A Vercel deployment whose Root Directory is apps/portal installs only THIS workspace, finds no typescript, and fails with 'It looks like you're trying to use TypeScript but do not have the required package(s) installed'. Declaring them makes the app buildable on its own, whichever directory the build runs from.",
+  "overrides": {
+    "jose": "^5.10.0"
+  },
+  "comment:overrides": "Duplicated from the workspace root, and must be kept in step with it. npm reads `overrides` only from the package.json at the ROOT of the install tree; with Vercel's Root Directory set to apps/portal that is THIS file, so the root copy is never consulted there. Without it, firebase-admin -> jwks-rsa -> jose@6 resolves and every server request dies with ERR_REQUIRE_ESM. Full reasoning at the repository root.",
   "engines": {
     "node": "22.x"
   },
