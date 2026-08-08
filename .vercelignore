@@ -1,0 +1,12 @@
+# Vercel uploads the whole workspace because the portal's Root Directory
+# (apps/portal) depends on packages/* outside it. These paths are needed by
+# nobody at build time and add ~46 MB to every deploy.
+
+CONDOMINIUM PROJECTS/
+Development_Guide/
+scripts/seed/
+image.png
+
+# apps/internal is deliberately NOT listed. It is a declared npm workspace, and
+# removing its package.json makes the install step fail lockfile validation.
+# Its tracked source is 1.3 MB, so excluding it would buy nothing anyway.

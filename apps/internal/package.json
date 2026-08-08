@@ -31,7 +31,12 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^26.1.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "postcss": "^8.5.25",
-    "tailwindcss": "^4.3.3"
-  }
+    "tailwindcss": "^4.3.3",
+    "typescript": "^6.0.3"
+  },
+  "comment:devDependencies": "Same as the portal, and for the same reason — see the note there. This app is not deployed to Vercel, but a build run from apps/internal on a machine that installed only this workspace fails identically, and the two apps giving different answers to the same question is how one of them quietly stops building."
 }
