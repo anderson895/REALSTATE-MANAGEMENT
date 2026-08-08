@@ -90,10 +90,23 @@ service cloud.firestore {
       allow write: if isAdmin() || hasRole(['MARKETING']);
     }
 
+    /*
+     * Units — public to read, and NOT writable by the role that adds them.
+     *
+     * That reads like a mistake and is not. Marketing holds UNIT_INVENTORY with
+     * `create` and `modify` in the RBAC matrix, and adds stock at /inventory —
+     * but every one of those writes goes through a server action using the
+     * Admin SDK, which bypasses this file entirely. Granting MARKETING here
+     * would add a SECOND path: a browser write that skips the id allocation,
+     * the stats recompute and the `unit.created` audit entry, and could set a
+     * unit's status to Sold with no reservation behind it.
+     *
+     * `isAdmin()` stays for the same reason it was written — a console-level
+     * escape hatch — and status changes still flow through the reservation
+     * transaction, never from a browser.
+     */
     match /units/{unitId} {
       allow read: if true;
-      // Status changes flow through the Admin SDK inside a transaction, never
-      // from a browser. Only inventory managers may edit directly.
       allow write: if isAdmin();
     }
 
@@ -209,9 +222,27 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    /*
+     * Announcements — public to read, server-only to write.
+     *
+     * `read: if true` because these are advertisements. A Guest User browsing
+     * the Portal is exactly who they are for, and the images behind them sit on
+     * the public Cloudinary CDN for the same reason.
+     *
+     * `write: if false` and NOT `hasRole(['MARKETING'])`, which is what this
+     * said before anything was built on it. Every announcement is now written
+     * by a server action that re-checks `create`/`delete` on ADVERTISEMENT,
+     * denormalises the project name, and appends to `auditLogs` — and an audit
+     * entry only tells the truth if there is no second path that skips it. A
+     * browser write would let Marketing post with no trail, which is the one
+     * thing this module was asked to guarantee.
+     *
+     * Same reasoning as /reservations, /payments and /documents above. The
+     * Admin SDK bypasses these rules by design.
+     */
     match /announcements/{announcementId} {
       allow read: if true;
-      allow write: if hasRole(['MARKETING']);
+      allow write: if false;
     }
 
     match /notifications/{notificationId} {

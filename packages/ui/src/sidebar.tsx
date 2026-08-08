@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import Link from 'next/link';
 import { cn } from './cn';
 import { MobileNav } from './mobile-nav';
+import { NavLinks } from './nav-links';
 import { SidebarToggle } from './sidebar-toggle';
 import { SHELL_STYLES, type ShellVariant } from './shell-theme';
 import type { NavSection } from './sidebar-types';
@@ -43,6 +43,14 @@ export interface AppShellProps {
   readonly brand: string;
   readonly subtitle?: string;
   readonly sections: readonly NavSection[];
+  /**
+   * FALLBACK only, since the highlight moved into `NavLinks`.
+   *
+   * It was the single source of truth and could not be: it is read in a layout,
+   * and a layout does not re-render on client-side navigation, so the lit item
+   * froze on whichever page was last loaded from the server. `usePathname()`
+   * decides now; this is what it falls back to outside a Next router.
+   */
   readonly currentPath: string;
   readonly footer?: ReactNode;
   readonly children: ReactNode;
@@ -170,40 +178,11 @@ export function AppShell({
             )}
           >
             {sections.map((section, i) => {
+              // A Client Component, because the highlight has to survive a
+              // client-side navigation and this layout does not re-render on
+              // one. See the note in nav-links.tsx.
               const items = (
-                <ul className="space-y-0.5">
-                  {section.items.map((item) => {
-                    const active =
-                      currentPath === item.href || currentPath.startsWith(`${item.href}/`);
-                    return (
-                      <li key={item.href}>
-                        <Link
-                          href={item.href}
-                          title={item.label}
-                          aria-current={active ? 'page' : undefined}
-                          className={cn(
-                            'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors',
-                            'rail:justify-center rail:px-0',
-                            active ? s.itemActive : s.item,
-                          )}
-                        >
-                          {item.icon ? <span className="shrink-0">{item.icon}</span> : null}
-                          <span className="flex-1 truncate rail:hidden">{item.label}</span>
-                          {item.badge ? (
-                            <span
-                              className={cn(
-                                'rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
-                                s.badge,
-                              )}
-                            >
-                              {item.badge}
-                            </span>
-                          ) : null}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <NavLinks items={section.items} variant={variant} fallbackPath={currentPath} />
               );
 
               if (!collapsibleSections || !section.title) {

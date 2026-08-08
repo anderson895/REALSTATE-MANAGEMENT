@@ -20,11 +20,13 @@ import { UserMenu } from './user-menu';
  * the route list against the RBAC matrix, so a role's menu is whatever its
  * grants say and the two cannot drift apart.
  *
- * An IT Administrator holds every module and therefore sees every item, which
- * is what makes that account able to stand in for any department during the
- * demo. That is a consequence of the grants, not a bypass: `requireModule()`
- * and the Security Rules still decide what the pages behind those links will
- * actually hand over.
+ * The IT Administrator used to hold every module and see every item, which made
+ * that account able to stand in for any department during a demo. note.txt
+ * ended that — "accessible lang sa maintenance system only, accessible add
+ * users only" — so `admin` now sees four links: the dashboard, the audit trail,
+ * Users & Roles, and Maintenance in `next dev`. Use the departmental logins to
+ * walk through the business screens: jflores (Documentation), cfernandez
+ * (Billing), jramos (Sales).
  */
 
 function initialsOf(name: string): string {
@@ -66,9 +68,10 @@ export default async function InternalLayout({ children }: { children: React.Rea
       }
       sections={navigationFor(session.role)}
       currentPath={currentPath}
-      // An IT Administrator holds every module: nineteen items over five
-      // groups, long enough that the group being worked in scrolls out of
-      // sight. Only the group holding the current page starts open.
+      // Only the group holding the current page starts open. Kept after IT was
+      // stripped back to four links, because it is the busier desks the setting
+      // is for — Documentation spans three groups, and Account Receivables
+      // opens with Overview, Processing, Finance and Administration at once.
       collapsibleSections
       topbar={
         <div className="flex min-w-0 flex-1 items-center gap-4 px-4">

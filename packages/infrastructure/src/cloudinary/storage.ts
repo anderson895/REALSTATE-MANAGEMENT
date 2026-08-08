@@ -27,13 +27,42 @@ import { getServerConfig } from '../config';
  * See Development Plan.md §2.4 and §12.2.
  */
 
-export type AssetKind = 'reservation-payment' | 'client-document' | 'contract';
+export type AssetKind =
+  | 'reservation-payment'
+  | 'client-document'
+  | 'contract'
+  | 'announcement-image';
+
+/**
+ * How an asset is delivered.
+ *
+ * `authenticated` — the URL alone is not enough; retrieval needs a signed,
+ * expiring link from `signedUrlFor`. Everything personal is stored this way.
+ *
+ * `upload` — the public CDN, fetchable by URL by anyone who has it. Correct
+ * for exactly one thing: material whose PURPOSE is to be seen publicly.
+ */
+type Delivery = 'authenticated' | 'upload';
 
 /** Where each kind of file lives, and how it is delivered. */
-const ASSET_POLICY: Record<AssetKind, { folder: string; type: 'authenticated' }> = {
+const ASSET_POLICY: Record<AssetKind, { folder: string; type: Delivery }> = {
   'reservation-payment': { folder: 'sfsr/reservations/payments', type: 'authenticated' },
   'client-document': { folder: 'sfsr/clients/documents', type: 'authenticated' },
   contract: { folder: 'sfsr/contracts', type: 'authenticated' },
+  /*
+   * Marketing images — project renders and announcement art.
+   *
+   * PUBLIC, deliberately, and the one kind here that is. `upload-media.ts`
+   * already puts project heroes and floor plans on `type: 'upload'` for the
+   * same reason: an advertisement behind a 5-minute signed URL is not an
+   * advertisement. It also means the Portal can render these straight from the
+   * stored URL through `cloudinaryUrl()` with no server round trip.
+   *
+   * The corollary matters and is the reason this comment exists: NOTHING
+   * personal may be uploaded under this kind. The route that issues these
+   * tickets accepts images only and is reachable by Marketing alone.
+   */
+  'announcement-image': { folder: 'sfsr/announcements', type: 'upload' },
 };
 
 export const ACCEPTED_MIME_TYPES = [
@@ -41,6 +70,21 @@ export const ACCEPTED_MIME_TYPES = [
   'image/jpeg',
   'image/jpg',
   'image/png',
+] as const;
+
+/**
+ * Images only — no PDF.
+ *
+ * An announcement is rendered in an `<img>`; a PDF uploaded to it would store
+ * fine and then draw as a broken box on every screen showing the post.
+ * `webp` is accepted here although the reservation uploads do not take it,
+ * because these come off a designer's machine rather than a buyer's phone.
+ */
+export const ACCEPTED_IMAGE_MIME_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
 ] as const;
 
 /** RESERVATION.doc: "Maximum File Size: 10 MB". */
@@ -53,7 +97,7 @@ export interface UploadTicket {
   readonly timestamp: number;
   readonly publicId: string;
   readonly folder: string;
-  readonly type: 'authenticated';
+  readonly type: Delivery;
 }
 
 function configure(): ReturnType<typeof getServerConfig>['cloudinary'] {

@@ -184,9 +184,34 @@ const MATRIX: Record<InternalRole, ModuleGrants> = {
     OFFICIAL_RECEIPT: ['view', 'create', 'print'],
   },
 
-  // "Upload announcement, project details"
+  /**
+   * "Upload announcement, project details"
+   *
+   * ── Why this role holds UNIT_INVENTORY, which RBAC.xls does not give it ──
+   *
+   * A client instruction: "dapat nakakapag add din ang marketing ng mga project
+   * at unit." The workbook's row is one line long and names announcements and
+   * "project details"; adding the projects and the units themselves goes past
+   * it, and the reason to allow that is that nobody else can do it either.
+   * UNIT_INVENTORY is view-and-print for Sales and Account Receivables, and the
+   * only write access anywhere was `isAdmin()` in the Security Rules — an
+   * escape hatch, not a screen. New stock had to be seeded from a workbook.
+   *
+   * NOT `delete`, and that is the whole of the caution here. A unit is
+   * referenced by reservations, payments, documents and an audit trail;
+   * deleting one would orphan every record that names it, and a unit taken off
+   * the market is `On Hold` or `Sold`, never gone. `modify` is granted because
+   * a mistyped price has to be fixable by the person who typed it.
+   *
+   * WATCH OUT: `pricePerSqmCentavos` and `purchasePriceCentavos` are what
+   * PricingService quotes a buyer from. This grant puts the price of a
+   * ₱6,000,000 unit in Marketing's hands, which is a real widening of who can
+   * move money in this system. `unit.created` and `unit.updated` carry the
+   * before-and-after into the append-only log for exactly that reason.
+   */
   MARKETING: {
     ADVERTISEMENT: ['view', 'create', 'modify', 'delete'],
+    UNIT_INVENTORY: ['view', 'create', 'modify', 'print'],
   },
 
   // "View Client profile"

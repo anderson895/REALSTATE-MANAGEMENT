@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PASSWORD_POLICY, validatePassword } from '@sfsr/domain';
-import {
-  generateTemporaryPassword,
-  suggestUsername,
-  validateWalkInBuyer,
-} from '../lib/walk-in';
+import { generateTemporaryPassword, suggestUsername } from '../lib/credentials';
+import { validateWalkInBuyer } from '../lib/walk-in';
 
 const buyer = (over: Partial<Parameters<typeof validateWalkInBuyer>[0]> = {}) => ({
   firstName: 'Joshua',

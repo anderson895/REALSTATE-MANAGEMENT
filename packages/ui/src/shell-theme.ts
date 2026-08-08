@@ -12,8 +12,10 @@
  * touched by this file existing.
  *
  * `brand` is the buyer portal's deep-green sidebar — an explicit client
- * instruction, with a reference screenshot: white logo plate on top, green
- * body, gold marking the current page, tagline at the foot.
+ * instruction, with a reference screenshot: green body, gold marking the
+ * current page, tagline at the foot. The reference also had a WHITE logo plate
+ * on top and that is the one part the client later reversed; see `brandBlock`
+ * below for why the white block had to go.
  */
 
 export type ShellVariant = 'light' | 'brand' | 'navy';
@@ -71,11 +73,37 @@ export const SHELL_STYLES: Record<ShellVariant, ShellStyles> = {
     // trying to cancel `border-r` from here: both would be single-class
     // selectors, so which one won would come down to stylesheet order.
     surface: 'border-brand-600 bg-brand-600 dark:border-brand-900 dark:bg-brand-900',
-    // White plate, as in the reference. The crest is a dark-green mark, so it
-    // needs a light ground — on the green body it would vanish.
-    brandBlock: 'bg-white dark:bg-neutral-900',
-    brandText: 'text-[13px] font-bold uppercase leading-tight tracking-wide text-brand-700 dark:text-brand-300',
-    subtitleText: 'text-[10px] uppercase tracking-[0.12em] text-neutral-500',
+    /*
+     * The plate is GREEN, one step deeper than the body — not white.
+     *
+     * It was white, matching the client's original reference screenshot, and
+     * the client has since asked for the opposite: "itry nalang itong gawin
+     * same sa theme color ng sidebar at medyo dark ... hindi na din magmukhang
+     * may plain line."
+     *
+     * They are describing a real defect rather than a preference. A white block
+     * sitting on a deep-green panel meets it in a hard horizontal edge across
+     * the full width of the sidebar, and that edge reads as a stray rule
+     * somebody forgot to remove — there is nothing else on the page it belongs
+     * to. `brand-800` on `brand-600` separates the plate from the menu by TONE,
+     * which is exactly what the navy skin does for the Internal system and why
+     * that one never grew the same complaint.
+     *
+     * ── The reason white was chosen, and why it no longer applies ────────
+     *
+     * "The crest is a dark-green mark, so it needs a light ground — on the
+     * green body it would vanish." Half right. The mark is a MEDIUM green
+     * stroke (#4a9d4a-ish) with orange and purple diagonals, and against
+     * #17331f it clears 6:1 — the Internal system already renders the same file
+     * on a dark navy plate and it reads fine. What would genuinely vanish is a
+     * dark-green mark, and this is not one.
+     */
+    brandBlock: 'bg-brand-800 dark:bg-brand-900',
+    // White, not brand-700: the plate is now the dark surface, so the title has
+    // to come forward off it rather than sink into it. This is the whole of
+    // "para kita yung title".
+    brandText: 'text-[13px] font-bold uppercase leading-tight tracking-wide text-white',
+    subtitleText: 'text-[10px] uppercase tracking-[0.12em] text-white/55',
     sectionTitle: 'text-[11px] font-semibold uppercase tracking-[0.12em] text-white/45',
     item: 'text-white/75 hover:bg-white/10 hover:text-white',
     // Filled gold, per the reference design — not the earlier gold left bar on
@@ -85,7 +113,9 @@ export const SHELL_STYLES: Record<ShellVariant, ShellStyles> = {
     itemActive: 'bg-accent-400 font-semibold text-brand-900',
     badge: 'bg-accent-500 text-white',
     footer: 'border-t border-white/15',
-    closeButton: 'text-brand-700 hover:bg-neutral-100 dark:text-brand-300 dark:hover:bg-neutral-800',
+    // Sits ON the brand plate, so it follows it. Dark-green-on-white became
+    // invisible the moment the plate stopped being white.
+    closeButton: 'text-white/80 hover:bg-white/10',
   },
 
   /*

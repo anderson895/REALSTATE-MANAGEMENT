@@ -15,9 +15,13 @@ import { PublicShell } from './public-shell';
  * drawn for the full width.
  *
  * SIGNED IN → `AppShell` with `variant="brand"`: the deep-green sidebar the
- * client asked for, with the reference screenshot as the target — white logo
- * plate, MAIN MENU, gold on the current page, tagline at the foot. This is the
- * "sa loob ng account ni buyer" half of the same instruction.
+ * client asked for, with the reference screenshot as the target — MAIN MENU,
+ * gold on the current page, tagline at the foot. This is the "sa loob ng
+ * account ni buyer" half of the same instruction.
+ *
+ * The reference had a white logo plate at the top. The client later reversed
+ * that — it met the green body in a hard edge that read as a stray rule — so
+ * the plate is now `brand-800`. See `brandBlock` in packages/ui/src/shell-theme.ts.
  *
  * The Internal Management System stays on the default neutral skin; this was
  * about the buyer's portal.

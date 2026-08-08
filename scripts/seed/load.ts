@@ -14,14 +14,11 @@ import { join } from 'node:path';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore, type Firestore } from 'firebase-admin/firestore';
-import { resolveRoleFromSheet } from '@sfsr/domain';
+import { internalEmailFor, resolveRoleFromSheet } from '@sfsr/domain';
 import { recomputeStats } from './recompute-stats';
 
 const DATA_DIR = join(import.meta.dirname, 'data');
 const DRY_RUN = process.argv.includes('--dry-run');
-
-/** Employees have a username in RBAC.xls but no email; Firebase Auth needs one. */
-const INTERNAL_EMAIL_DOMAIN = 'sfsr.internal';
 
 interface ProjectFixture {
   id: string;
@@ -132,47 +129,78 @@ async function seedSalesOrg(db: Firestore): Promise<void> {
 }
 
 /**
+ * Hand-maintained fixtures for the departments RBAC.xls has no sheet for.
+ *
+ * ── Why these exist at all ──────────────────────────────────────────
+ *
+ * `employees.json` is GENERATED — `npm run seed:extract` rebuilds it from the
+ * personnel sheets in RBAC.xls, so anything written into it by hand disappears
+ * on the next run. Two roles have no sheet to be generated FROM:
+ *
+ *   SALES     — the workbook covers Accounting, Billing, Cash, Documentation,
+ *               IT, Legal, Loans and Receivables, and Sales is simply absent,
+ *               which is why no sales agent could sign in. note.txt asks for
+ *               exactly that: "gawan ng login credentials si sales agent".
+ *   MARKETING — has a row in USER ROLE ACCESS and no personnel sheet at all:
+ *               the Advertisement module belongs to a role with zero seedable
+ *               accounts (Development Plan.md §12, finding 12).
+ *
+ * Neither sheet could be added programmatically. ACE.OLEDB refuses CREATE TABLE
+ * against legacy .xls, and rewriting the workbook through xlrd/xlwt produces a
+ * file ACE.OLEDB then declines to read at all — which broke the extract
+ * entirely until the backup went back. Adding one needs Excel itself.
+ *
+ * ── Marketing is seeded AND creatable from the interface ────────────
+ *
+ * These are not alternatives. /admin/users is how a Marketing account is
+ * created in a running system, and EMP030 was created exactly that way — the
+ * fixture is a transcript of it, so a database reset does not cost the account
+ * and a demo does not start with the Advertisement module locked out.
+ *
+ * Its `seedPassword` is therefore the GENERATED one that /admin/users handed
+ * over on screen, not a tidy `Mktg@123`. That is the point: the account already
+ * exists in Auth with that password, and `seedPassword` is only ever applied at
+ * CREATE (see below), so any other value would be a fixture that documents a
+ * credential nobody can sign in with. Both databases now agree — the live one
+ * because it was typed there first, a fresh one because this recreates it.
+ *
+ * A stopgap, and meant to be deleted: the day RBAC.xls carries these sheets,
+ * `seed:extract` emits the rows into `employees.json` and these files can go.
+ */
+const OVERLAY_FILES = ['employees-sales.json', 'marketing.json'] as const;
+
+/**
  * Creates the internal accounts.
  *
  * The plaintext passwords in RBAC.xls are used ONCE here and never stored.
  * Every account carries `mustChangePassword: true` (Development Plan.md §12.3).
  *
- * ── Why there are two fixture files ─────────────────────────────────
- *
- * `employees.json` is GENERATED — `npm run seed:extract` rebuilds it from the
- * personnel sheets in RBAC.xls, so anything written into it by hand disappears
- * on the next run.
- *
- * RBAC.xls has no SALES sheet. It never has: the workbook covers Accounting,
- * Billing, Cash, Documentation, IT, Legal, Loans and Receivables, and Sales is
- * simply absent — which is why no sales agent could sign in. note.txt asks for
- * exactly that: "gawan ng login credentials si sales agent".
- *
- * The sheet could not be added programmatically. ACE.OLEDB refuses CREATE
- * TABLE against legacy .xls, and rewriting the workbook through xlrd/xlwt
- * produces a file ACE.OLEDB then declines to read at all — which broke the
- * extract entirely until the backup went back. Adding it needs Excel itself.
- *
- * So the sales accounts live in a SECOND, hand-maintained fixture the extract
- * never touches. This is a stopgap and is meant to be deleted: once a SALES
- * sheet exists in RBAC.xls, `seed:extract` will emit these four rows into
- * `employees.json` on its own, and this file and the merge below can go.
+ * WATCH OUT: `seedPassword` only applies when the Auth user is CREATED. An
+ * account that already exists keeps whatever password it has, so re-running
+ * this never resets anybody's credentials. That is deliberate — but it means a
+ * fixture whose `seedPassword` was edited after the account existed is
+ * describing a password that will not work until the account is deleted and
+ * seeded again.
  */
 async function seedEmployees(db: Firestore): Promise<void> {
   console.log('\n── Employees ────────────────────────────────────');
   const generated = load<EmployeeFixture>('employees.json');
-  const sales = load<EmployeeFixture>('employees-sales.json');
 
-  // The generated file wins on a collision, so the day RBAC.xls does carry a
-  // SALES sheet this overlay quietly stops mattering rather than fighting it.
+  // The generated file wins on a collision, and so does an earlier overlay over
+  // a later one — so the day RBAC.xls carries these sheets, the overlays quietly
+  // stop mattering rather than fighting the generated rows.
   const seen = new Set(generated.map((e) => e.username.toLowerCase()));
-  const employees = [
-    ...generated,
-    ...sales.filter((e) => !seen.has(e.username.toLowerCase())),
-  ];
-  console.log(
-    `  ${generated.length} from RBAC.xls + ${employees.length - generated.length} sales overlay`,
-  );
+  const employees = [...generated];
+
+  for (const file of OVERLAY_FILES) {
+    const added = load<EmployeeFixture>(file).filter(
+      (e) => !seen.has(e.username.toLowerCase()),
+    );
+    for (const employee of added) seen.add(employee.username.toLowerCase());
+    employees.push(...added);
+    console.log(`  ${file.padEnd(22)}${added.length} added`);
+  }
+  console.log(`  ${generated.length} from RBAC.xls, ${employees.length} in total`);
 
   const auth = getAuth();
 
@@ -180,7 +208,9 @@ async function seedEmployees(db: Firestore): Promise<void> {
   let updated = 0;
 
   for (const emp of employees) {
-    const email = `${emp.username}@${INTERNAL_EMAIL_DOMAIN}`;
+    // Same helper User Management uses, so an account added through the
+    // interface is addressed exactly like one that came out of the workbook.
+    const email = internalEmailFor(emp.username);
 
     // The Department column cannot drive permissions: nine employees share
     // "Loans Management Department" but split across Documentation, Billing

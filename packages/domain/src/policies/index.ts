@@ -5,6 +5,8 @@ export {
   PASSWORD_REQUIREMENTS,
   SEX_OPTIONS,
   MINIMUM_AGE_YEARS,
+  INTERNAL_EMAIL_DOMAIN,
+  internalEmailFor,
   validateUsername,
   validatePassword,
   isOfLegalAge,

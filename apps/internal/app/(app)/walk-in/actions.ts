@@ -18,12 +18,8 @@ import {
 } from '@sfsr/infrastructure/server';
 import { requireModule, toActor } from '@/lib/session';
 import { reservationWorkflow } from '@/lib/reservations';
-import {
-  generateTemporaryPassword,
-  suggestUsername,
-  validateWalkInBuyer,
-  type WalkInBuyerInput,
-} from '@/lib/walk-in';
+import { generateTemporaryPassword, suggestUsername } from '@/lib/credentials';
+import { validateWalkInBuyer, type WalkInBuyerInput } from '@/lib/walk-in';
 import { walkInSchema } from '@/lib/walk-in-schema';
 
 /**

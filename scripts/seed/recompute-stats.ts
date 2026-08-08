@@ -23,19 +23,18 @@
 import { pathToFileURL } from 'node:url';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { computeProjectStats } from '@sfsr/infrastructure/node';
 
-export interface ProjectStats {
-  readonly totalUnits: number;
-  readonly availableUnits: number;
-  readonly onHoldUnits: number;
-  readonly soldUnits: number;
-  readonly totalParking: number;
-  readonly availableParking: number;
-  readonly minPriceCentavos: number | null;
-  readonly maxPriceCentavos: number | null;
-  readonly unitTypes: string[];
-}
-
+/**
+ * The arithmetic lives in `@sfsr/infrastructure`, not here.
+ *
+ * Marketing can now add units from /inventory, and that write recomputes the
+ * affected project on its own. Two implementations of these numbers is two
+ * places that can disagree about how many units are available, so both call
+ * `computeProjectStats`. What legitimately differs is the FETCHING: this scans
+ * all three collections once for a bulk run, the app reads a single project's
+ * documents after a single change.
+ */
 export async function recomputeStats(db: Firestore, quiet = false): Promise<void> {
   // One full scan here, so that every page view afterwards costs 5 reads
   // instead of 155. This script runs on demand, not per request.
@@ -50,23 +49,10 @@ export async function recomputeStats(db: Firestore, quiet = false): Promise<void
   }
 
   for (const project of projects.docs) {
-    const mine = units.docs.filter((u) => u.data().projectId === project.id);
-    const myParking = parking.docs.filter((p) => p.data().projectId === project.id);
-    const prices = mine
-      .map((u) => Number(u.data().purchasePriceCentavos ?? 0))
-      .filter((n) => n > 0);
-
-    const stats: ProjectStats = {
-      totalUnits: mine.length,
-      availableUnits: mine.filter((u) => u.data().status === 'Available').length,
-      onHoldUnits: mine.filter((u) => u.data().status === 'On Hold').length,
-      soldUnits: mine.filter((u) => u.data().status === 'Sold').length,
-      totalParking: myParking.length,
-      availableParking: myParking.filter((p) => p.data().status === 'Available').length,
-      minPriceCentavos: prices.length ? Math.min(...prices) : null,
-      maxPriceCentavos: prices.length ? Math.max(...prices) : null,
-      unitTypes: [...new Set(mine.map((u) => String(u.data().unitType)))].sort(),
-    };
+    const stats = computeProjectStats(
+      units.docs.filter((u) => u.data().projectId === project.id).map((u) => u.data()),
+      parking.docs.filter((p) => p.data().projectId === project.id).map((p) => p.data()),
+    );
 
     await project.ref.set({ stats, statsComputedAt: FieldValue.serverTimestamp() }, { merge: true });
 

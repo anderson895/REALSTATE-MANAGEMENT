@@ -1,0 +1,14 @@
+[
+  {
+    "id": "EMP030",
+    "fullName": "John Doe",
+    "department": "Marketing Department",
+    "position": "Marketing Staff",
+    "username": "jdoe71",
+    "seedPassword": "4U%vd8J$%a4M",
+    "userRole": "Staff",
+    "status": "Active",
+    "isSupervisor": false,
+    "sourceSheet": "MARKETING"
+  }
+]

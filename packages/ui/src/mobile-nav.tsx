@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { cn } from './cn';
+import { NavLinks } from './nav-links';
 import { ThemeToggleCompact } from './theme';
 import { SHELL_STYLES, type ShellVariant } from './shell-theme';
 import type { NavSection } from './sidebar-types';
@@ -46,15 +47,24 @@ export function MobileNav({
   const [open, setOpen] = useState(false);
   const s = SHELL_STYLES[variant];
 
-  // Close on navigation — otherwise the drawer stays open over the new page
-  // when the user goes back or forward.
-  //
-  // Adjusted during render rather than inside an effect. An effect would paint
-  // the stale open drawer first and then re-render to close it; this is
-  // React's documented pattern for reacting to a changed prop.
-  const [lastPath, setLastPath] = useState(currentPath);
-  if (currentPath !== lastPath) {
-    setLastPath(currentPath);
+  /*
+   * Close on navigation — otherwise the drawer stays open over the new page
+   * when the user goes back or forward.
+   *
+   * Watches `usePathname()`, not the `currentPath` PROP. The prop comes from
+   * the layout, and a layout does not re-render on client-side navigation, so
+   * it never changed and this never fired: tapping Back with the drawer open
+   * left it open over the previous page. Tapping a LINK closed it, but only
+   * because `onNavigate` does that by hand.
+   *
+   * Adjusted during render rather than inside an effect. An effect would paint
+   * the stale open drawer first and then re-render to close it; this is
+   * React's documented pattern for reacting to a changed value.
+   */
+  const pathname = usePathname() ?? currentPath;
+  const [lastPath, setLastPath] = useState(pathname);
+  if (pathname !== lastPath) {
+    setLastPath(pathname);
     setOpen(false);
   }
 
@@ -186,28 +196,12 @@ export function MobileNav({
                   {section.title ? (
                     <p className={cn('px-2 pb-2', s.sectionTitle)}>{section.title}</p>
                   ) : null}
-                  <ul className="space-y-0.5">
-                    {section.items.map((item) => {
-                      const active =
-                        currentPath === item.href || currentPath.startsWith(`${item.href}/`);
-                      return (
-                        <li key={item.href}>
-                          <Link
-                            href={item.href}
-                            onClick={() => setOpen(false)}
-                            aria-current={active ? 'page' : undefined}
-                            className={cn(
-                              'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm',
-                              active ? s.itemActive : s.item,
-                            )}
-                          >
-                            {item.icon ? <span className="shrink-0">{item.icon}</span> : null}
-                            <span className="flex-1 truncate">{item.label}</span>
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                  <NavLinks
+                    items={section.items}
+                    variant={variant}
+                    fallbackPath={currentPath}
+                    onNavigate={() => setOpen(false)}
+                  />
                 </div>
               ))}
             </nav>

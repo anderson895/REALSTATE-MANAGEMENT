@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { cn } from '@sfsr/ui';
 import type { PublicNavItem } from '@/lib/navigation';
+import { PublicNav } from './public-nav';
 
 /**
  * Shell for visitors who are not signed in.
@@ -51,29 +51,9 @@ export function PublicShell({
           </span>
         </Link>
 
-        {/* order-3 + w-full drops the nav onto its own line once the bar wraps,
-            rather than letting it squeeze the brand and the sign-in button. */}
-        <nav className="scrollbar-none order-3 flex w-full items-center gap-6 overflow-x-auto lg:order-none lg:w-auto">
-          {items.map((item) => {
-            const active =
-              currentPath === item.href || currentPath.startsWith(`${item.href}/`);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? 'page' : undefined}
-                className={cn(
-                  'whitespace-nowrap border-b-2 py-1.5 text-sm transition-colors',
-                  active
-                    ? 'border-brand-600 font-semibold text-brand-600'
-                    : 'border-transparent text-neutral-700 hover:text-brand-600',
-                )}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
+        {/* A client island: the underline has to survive a client-side
+            navigation, which this layout does not re-render on. */}
+        <PublicNav items={items} fallbackPath={currentPath} />
 
         <div className="flex items-center gap-2">
           <Link

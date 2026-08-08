@@ -15,6 +15,8 @@
 
 export { cn } from './cn';
 export { AppShell, StatusBadge, type AppShellProps } from './sidebar';
+export { NavLinks } from './nav-links';
+export { isActivePath } from './active-path';
 export type { NavItem, NavSection } from './sidebar-types';
 export { SHELL_STYLES, type ShellVariant, type ShellStyles } from './shell-theme';
 export { MobileNav } from './mobile-nav';
@@ -23,6 +25,7 @@ export { AuthLayout } from './auth-layout';
 export { ThemeProvider, ThemeToggle, ThemeToggleCompact, useTheme } from './theme';
 export { PageHeader, Card, EmptyState, LockedState } from './page';
 export { ConfirmDialog, type ConfirmTone } from './confirm-dialog';
+export { Modal } from './modal';
 export {
   cloudinaryUrl,
   MissingAsset,

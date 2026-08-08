@@ -31,6 +31,24 @@ export const PASSWORD_POLICY = {
   specialPattern: /[^a-zA-Z0-9]/,
 } as const;
 
+/**
+ * The address an internal account signs in with.
+ *
+ * Employees have a username in RBAC.xls and no email; Firebase Auth requires
+ * one, so it is synthesised from the username. `sfsr.internal` is deliberately
+ * not a routable domain — nothing is ever delivered to these addresses, and a
+ * real one would invite somebody to try.
+ *
+ * Both the seed and User Management mint accounts, and an account whose address
+ * does not match the pattern is one nobody can look up by hand afterwards. So
+ * the rule lives here, where neither can hold its own copy (§3.1).
+ */
+export const INTERNAL_EMAIL_DOMAIN = 'sfsr.internal';
+
+export function internalEmailFor(username: string): string {
+  return `${username.trim().toLowerCase()}@${INTERNAL_EMAIL_DOMAIN}`;
+}
+
 export interface PolicyViolation {
   readonly rule: string;
   readonly message: string;

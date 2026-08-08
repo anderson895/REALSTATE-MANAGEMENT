@@ -26,6 +26,15 @@ export {
 } from './catalog.queries';
 
 export {
+  computeProjectStats,
+  recomputeProjectStats,
+  unitPrefixInUse,
+  nextUnitId,
+  unitNumberTaken,
+  type UnitIdAllocation,
+} from './catalog.mutations';
+
+export {
   listReservationsByStatus,
   countReservationsByStatus,
   getReservation,
@@ -48,6 +57,28 @@ export {
   type TrippingRow,
   type TrippingStatus,
 } from './tripping.queries';
+
+export {
+  listEmployees,
+  getEmployee,
+  activeEmployeeIdsWithRole,
+  isUsernameTaken,
+  allocateEmployeeId,
+  formatEmployeeId,
+  MAX_EMPLOYEES_PER_QUERY,
+  type EmployeeRow,
+} from './employee.queries';
+
+export {
+  listAnnouncements,
+  getAnnouncement,
+  toAnnouncementRow,
+  ANNOUNCEMENT_STATUSES,
+  MAX_ANNOUNCEMENTS_PER_QUERY,
+  type AnnouncementRow,
+  type AnnouncementImage,
+  type AnnouncementStatus,
+} from './announcement.queries';
 
 export {
   listDocumentQueue,

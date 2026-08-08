@@ -156,6 +156,43 @@ describe('can — grants transcribed from USER ROLE ACCESS', () => {
     expect(can(staff('LOAN_OFFICER'), 'PAYMENT_MONITORING', 'modify')).toBe(false);
     expect(can(staff('LOAN_OFFICER'), 'CLIENT_PROFILE', 'delete')).toBe(false);
   });
+
+  /**
+   * Marketing writes the catalogue, and nobody else does.
+   *
+   * A client instruction past RBAC.xls: "dapat nakakapag add din ang marketing
+   * ng mga project at unit." Until then UNIT_INVENTORY was view-and-print for
+   * everyone who held it, and new stock could only arrive through the seed.
+   */
+  it('lets Marketing add stock, and no other role', () => {
+    expect(can(staff('MARKETING'), 'UNIT_INVENTORY', 'create')).toBe(true);
+    expect(can(staff('MARKETING'), 'UNIT_INVENTORY', 'modify')).toBe(true);
+
+    const mayAddStock = INTERNAL_ROLES.filter((role) =>
+      can(staff(role), 'UNIT_INVENTORY', 'create'),
+    );
+    expect(mayAddStock).toEqual(['MARKETING']);
+  });
+
+  /**
+   * A unit is referenced by reservations, payments, documents and an audit
+   * trail. Deleting one would orphan every record naming it — and a unit taken
+   * off the market is On Hold or Sold, never gone.
+   */
+  it('does not let Marketing delete a unit, only add and correct one', () => {
+    expect(can(staff('MARKETING'), 'UNIT_INVENTORY', 'delete')).toBe(false);
+    // The delete it does hold is over its own announcements, not over stock.
+    expect(can(staff('MARKETING'), 'ADVERTISEMENT', 'delete')).toBe(true);
+  });
+
+  it('leaves Sales and Account Receivables reading inventory, not writing it', () => {
+    for (const role of ['SALES', 'ACCOUNT_RECEIVABLES'] as const) {
+      expect(can(staff(role), 'UNIT_INVENTORY', 'view')).toBe(true);
+      expect(can(staff(role), 'UNIT_INVENTORY', 'print')).toBe(true);
+      expect(can(staff(role), 'UNIT_INVENTORY', 'create')).toBe(false);
+      expect(can(staff(role), 'UNIT_INVENTORY', 'modify')).toBe(false);
+    }
+  });
 });
 
 describe('can — approval is a supervisor act', () => {

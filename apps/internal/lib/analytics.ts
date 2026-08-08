@@ -68,9 +68,25 @@ export interface ProjectRow {
   readonly sold: number;
   readonly availableParking: number;
   readonly totalParking: number;
+  /**
+   * Costs nothing — it is already on the project document `listProjects` reads
+   * for the prices and parking. Null for The Legaspi Place, which has no render
+   * at all (§12.10); the table draws a branded placeholder, not a broken image.
+   */
+  readonly heroImageUrl: string | null;
 }
 
 export interface AnalyticsSnapshot {
+  /**
+   * When this snapshot was BUILT, not when it was read.
+   *
+   * Stamped inside the cached function on purpose: `unstable_cache` returns the
+   * same object until the TTL lapses, so this is the age of the figures on
+   * screen rather than the age of the request. That is exactly what "Last
+   * updated" has to mean, and taking `new Date()` in the component would make
+   * a sixty-second-old number claim to be current.
+   */
+  readonly generatedAt: string;
   readonly totalUnits: number;
   readonly available: number;
   readonly onHold: number;
@@ -141,6 +157,7 @@ async function buildSnapshot(): Promise<AnalyticsSnapshot> {
   ).reduce((n, status) => n + byStatus[status], 0);
 
   return {
+    generatedAt: new Date().toISOString(),
     totalUnits,
     available,
     onHold,
@@ -161,6 +178,7 @@ async function buildSnapshot(): Promise<AnalyticsSnapshot> {
       sold: counts[p.id]?.Sold ?? 0,
       availableParking: p.stats.availableParking,
       totalParking: p.stats.totalParking,
+      heroImageUrl: p.heroImageUrl,
     })),
     inventoryMix: [
       { name: 'Available', value: available },

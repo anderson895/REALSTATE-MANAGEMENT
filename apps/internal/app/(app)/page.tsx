@@ -1,23 +1,30 @@
-import { Money, ROLE_LABELS, canAccessModule, isInternalRole, modulesFor } from '@sfsr/domain';
+import { Info } from 'lucide-react';
+import { ROLE_LABELS, can, canAccessModule, isInternalRole, modulesFor } from '@sfsr/domain';
 import {
   countClients,
   countDocumentQueue,
   countReservationsByStatusAndProject,
   getAdminFirestore,
   getClientMasterfile,
+  listAnnouncements,
   listDocumentQueue,
   listPaymentQueue,
   listProjects,
   sumCollectedCentavos,
   searchClients,
 } from '@sfsr/infrastructure/server';
-import { Card, StatusBadge } from '@sfsr/ui';
+import { Card } from '@sfsr/ui';
 import { requireEmployee, toActor } from '@/lib/session';
+import { navigationFor } from '@/lib/navigation';
 import { getAnalytics } from '@/lib/analytics';
+import { getInventoryTrend } from '@/lib/inventory-trend';
 import { DOCUMENT_QUEUE_STATUSES, SUMMARY_CARDS } from '@/lib/documentation';
 import { BILLING_CARDS, PAYMENT_QUEUE_STATUSES } from '@/lib/billing';
+import { AnnouncementsPanel } from './announcements-panel';
 import { BillingDashboard } from './billing-dashboard';
 import { DocumentationDashboard } from './documentation-dashboard';
+import { InventoryDashboard } from './inventory-dashboard';
+import { ModuleLauncher } from './module-launcher';
 import {
   InventoryDonut,
   PipelineChart,
@@ -77,171 +84,189 @@ export default async function DashboardPage({
     return <BillingView />;
   }
 
-  const data = await getAnalytics();
-  const showCharts = canAccessModule(toActor(session), 'ANALYTICS');
+  const actor = toActor(session);
   const modules = modulesFor(session.role);
 
+  /*
+   * What this role may see decides what is FETCHED, not merely what is drawn.
+   *
+   * Gating only the rendering would hide the panels and still read every figure
+   * behind them on every page view — paying count() aggregations out of a
+   * 50,000/day quota to build something nobody is shown. Asking the matrix
+   * first is both the control and the cheaper path.
+   */
+  const canSeeInventory = canAccessModule(actor, 'UNIT_INVENTORY');
+  const showAnalytics = canAccessModule(actor, 'ANALYTICS');
+
+  // Everyone, whatever their role. An announcement is a notice to all staff and
+  // `announcements` is world-readable — see the panel for why it is not gated.
+  const announcements = await listAnnouncements(getAdminFirestore(), 4);
+
+  /*
+   * The landing screen for a role with no grant over stock or reporting —
+   * Accounting, Cash, Legal, Loans and IT.
+   *
+   * It offers the modules that role actually holds instead of a sales dashboard
+   * it has no business reading. note.txt strips the administrator of exactly
+   * this — "restrict sales, restrict finance" — and permissions.ts says so
+   * outright: "Deliberately NOT granted: DASHBOARD and ANALYTICS. Both report
+   * on sales and collections, which is business data." This page was showing it
+   * anyway, because `/` is where everyone lands and it never asked the matrix.
+   */
+  if (!canSeeInventory && !showAnalytics) {
+    return (
+      <DashboardShell session={session} moduleCount={modules.length}>
+        <div className="grid gap-5 lg:grid-cols-12">
+          <div className="lg:col-span-8">
+            <ModuleLauncher
+              sections={navigationFor(session.role)}
+              roleLabel={ROLE_LABELS[session.role]}
+            />
+          </div>
+          <AnnouncementsPanel announcements={announcements} className="lg:col-span-4" />
+        </div>
+      </DashboardShell>
+    );
+  }
+
+  /*
+   * Two more reads, both bounded.
+   *
+   * The trend has its own six-hour cache rather than sharing the dashboard's
+   * sixty seconds — it is the only figure here that reads a collection instead
+   * of counting one. See lib/inventory-trend.ts for the arithmetic.
+   */
+  const data = await getAnalytics();
+  const trend = canSeeInventory
+    ? await getInventoryTrend({
+        available: data.available,
+        onHold: data.onHold,
+        sold: data.sold,
+      })
+    : null;
+
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
-      <header className="mb-8">
+    <DashboardShell session={session} moduleCount={modules.length}>
+      {canSeeInventory && trend ? (
+        <InventoryDashboard
+          data={data}
+          trend={trend}
+          announcements={announcements}
+          // Each drawn from its own GRANT, not from the role. Marketing holds
+          // `create` on UNIT_INVENTORY and on ADVERTISEMENT; Sales and Account
+          // Receivables hold the module view-and-print and get the same figures
+          // with no buttons under them.
+          canAddStock={can(actor, 'UNIT_INVENTORY', 'create')}
+          canPostAnnouncement={can(actor, 'ADVERTISEMENT', 'create')}
+          canSeeReports={canAccessModule(actor, 'REPORTS')}
+        />
+      ) : (
+        // ANALYTICS without UNIT_INVENTORY. No role sits here today, and the
+        // charts below still render — this keeps the announcements visible
+        // rather than dropping them because of a combination nobody has.
+        <AnnouncementsPanel announcements={announcements} className="max-w-md" />
+      )}
+
+      {/*
+       * The four analytics charts, kept and moved below the fold.
+       *
+       * They are gated on ANALYTICS, which only Account Receivables holds, and
+       * they answer a different question from the panels above: those are the
+       * current position, these are its shape. Deleting them to match a mockup
+       * that does not draw them would take the reservation pipeline and the
+       * price spread with it, and nothing else in the system reports either.
+       */}
+      {showAnalytics ? (
+        <section className="mt-8">
+          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-500">
+            Analytics
+          </h2>
+          <div className="grid gap-5 lg:grid-cols-2">
+            <ChartPanel title="Inventory mix" note="Live count() aggregations across all projects.">
+              <InventoryDonut data={data.inventoryMix} />
+            </ChartPanel>
+
+            <ChartPanel
+              title="Reservation pipeline"
+              note="Where every live application currently sits."
+            >
+              <PipelineChart data={data.pipeline} />
+            </ChartPanel>
+
+            <ChartPanel
+              title="Units by project"
+              note="Stacked, so the bar height is the project's total inventory."
+            >
+              <ProjectStackedBar data={data.byProject} />
+            </ChartPanel>
+
+            <ChartPanel
+              title="Price range by project"
+              note="Cheapest and dearest unit currently listed."
+            >
+              <PriceRangeBar data={data.priceByProject} />
+            </ChartPanel>
+          </div>
+        </section>
+      ) : null}
+
+      <p className="mt-6 flex gap-2 rounded-xl border border-neutral-200/80 bg-white px-5 py-3.5 text-xs leading-relaxed text-neutral-500">
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-neutral-400" strokeWidth={2} aria-hidden="true" />
+        <span>
+          Unit counts are live count() aggregations — 15 reads per refresh rather than 150 — cached
+          for 60 seconds and tagged to the inventory, so verifying a payment or approving a
+          reservation refreshes them immediately. Every peso figure comes from the shared pricing
+          engine in @sfsr/domain, the same code the Portal uses.
+        </span>
+      </p>
+    </DashboardShell>
+  );
+}
+
+/**
+ * The greeting, shared by both landings.
+ *
+ * Extracted so the two branches cannot drift into two different welcomes — the
+ * header is the one part of the dashboard that is the same for a Cash Clerk and
+ * a Marketing Staff, because it describes the PERSON rather than the data.
+ */
+function DashboardShell({
+  session,
+  moduleCount,
+  children,
+}: {
+  session: { displayName: string; role: string; isSupervisor: boolean; employeeId: string };
+  moduleCount: number;
+  children: React.ReactNode;
+}) {
+  const roleLabel = isInternalRole(session.role) ? ROLE_LABELS[session.role] : session.role;
+
+  return (
+    <div className="mx-auto max-w-7xl px-6 py-8">
+      <header className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-navy-800">
           {/* split(' '), not split('') — the empty separator splits a string
               into CHARACTERS, so "Joanna Flores" was greeted as "J". */}
           Welcome back, {session.displayName.split(' ')[0]}
         </h1>
-        <p className="mt-1 text-sm text-neutral-500">
-          {/* Rank always, both ways round. This read "· Approver" or nothing
-              at all, so staff were never told their rank — and "Approver" now
-              overstates it: a Billing supervisor holds the flag but approves
-              no reservations. The rank is the fact; what it grants differs by
-              desk and is spelled out on the profile page. */}
-          {ROLE_LABELS[session.role]} · {session.isSupervisor ? 'Supervisor' : 'Staff'} ·{' '}
-          {session.employeeId} · {modules.length}{' '}
-          module{modules.length === 1 ? '' : 's'} available to this role.
+        <div aria-hidden="true" className="mt-2.5 h-0.5 w-16 rounded-full bg-gold-500" />
+        <p className="mt-3 text-sm text-neutral-500">
+          {/* Rank always, both ways round. This read "· Approver" or nothing at
+              all, so staff were never told their rank — and "Approver"
+              overstates it: a Billing supervisor holds the flag but approves no
+              reservations. The rank is the fact; what it grants differs by desk
+              and is spelled out on the profile page. */}
+          {roleLabel} · {session.isSupervisor ? 'Supervisor' : 'Staff'} · {session.employeeId} ·{' '}
+          {moduleCount} module{moduleCount === 1 ? '' : 's'} available to this role.
         </p>
       </header>
 
-      <section className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Stat label="Projects" value={String(data.projectCount)} />
-        <Stat label="Units" value={String(data.totalUnits)} />
-        <Stat label="Parking slots" value={String(data.totalParking)} />
-        <Stat
-          label="Highest unit price"
-          value={Money.fromCentavos(data.highestPriceCentavos).format()}
-        />
-      </section>
-
-      {showCharts ? (
-        <>
-          <section className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Stat label="Available" value={String(data.available)} tone="text-emerald-600" />
-            <Stat label="On hold" value={String(data.onHold)} tone="text-amber-600" />
-            <Stat
-              label="Sell-through"
-              value={`${data.sellThroughPct}%`}
-              hint="Held or sold, of all units"
-            />
-            <Stat
-              label="Active reservations"
-              value={String(data.activeReservations)}
-              hint="Excludes expired and cancelled"
-            />
-          </section>
-
-          <div className="mb-6 grid gap-6 lg:grid-cols-2">
-            <Panel title="Inventory mix" note="Live count() aggregations across all projects.">
-              <InventoryDonut data={data.inventoryMix} />
-            </Panel>
-
-            <Panel
-              title="Reservation pipeline"
-              note="Where every live application currently sits."
-            >
-              <PipelineChart data={data.pipeline} />
-            </Panel>
-
-            <Panel
-              title="Units by project"
-              note="Stacked, so the bar height is the project's total inventory."
-            >
-              <ProjectStackedBar data={data.byProject} />
-            </Panel>
-
-            <Panel
-              title="Price range by project"
-              note="Cheapest and dearest unit currently listed."
-            >
-              <PriceRangeBar data={data.priceByProject} />
-            </Panel>
-          </div>
-        </>
-      ) : (
-        // No ANALYTICS grant: the same inventory position, without the charts.
-        <Card className="mb-6">
-          <h2 className="border-b border-neutral-200 px-5 py-3 text-sm font-medium">
-            Unit inventory by status
-          </h2>
-          <ul className="divide-y divide-neutral-100">
-            {(
-              [
-                ['Available', data.available],
-                ['On Hold', data.onHold],
-                ['Sold', data.sold],
-              ] as const
-            ).map(([status, count]) => (
-              <li key={status} className="flex items-center justify-between px-5 py-3">
-                <StatusBadge status={status} />
-                <span className="tabular text-sm font-medium">{count}</span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-
-      <Card>
-        <h2 className="border-b border-neutral-200 px-5 py-3 text-sm font-medium">
-          By project
-        </h2>
-        <table className="w-full text-sm">
-          <thead className="text-left text-xs text-neutral-500">
-            <tr>
-              <th className="px-5 py-2 font-medium">Project</th>
-              <th className="px-5 py-2 text-right font-medium">Available</th>
-              <th className="px-5 py-2 text-right font-medium">On Hold</th>
-              <th className="px-5 py-2 text-right font-medium">Sold</th>
-              <th className="px-5 py-2 text-right font-medium">Parking</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-100">
-            {data.projects.map((p) => (
-              <tr key={p.id}>
-                <td className="px-5 py-2.5">
-                  <span className="font-medium">{p.name}</span>
-                  <span className="ml-2 text-xs text-neutral-400">{p.id}</span>
-                </td>
-                <td className="tabular px-5 py-2.5 text-right">{p.available}</td>
-                <td className="tabular px-5 py-2.5 text-right">{p.onHold}</td>
-                <td className="tabular px-5 py-2.5 text-right">{p.sold}</td>
-                <td className="tabular px-5 py-2.5 text-right text-neutral-500">
-                  {p.availableParking}/{p.totalParking}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-
-      <p className="mt-6 text-xs text-neutral-400">
-        Unit counts are live count() aggregations — 15 reads per refresh rather than 150 — cached
-        for 60 seconds and tagged to the inventory, so verifying a payment or approving a
-        reservation refreshes them immediately. Every peso figure comes from the shared pricing
-        engine in @sfsr/domain, the same code the Portal uses.
-      </p>
+      {children}
     </div>
   );
 }
 
-function Stat({
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  tone?: string;
-}) {
-  return (
-    <Card className="px-4 py-3">
-      <p className="text-xs text-neutral-500">{label}</p>
-      <p className={`tabular mt-1 text-lg font-semibold ${tone ?? ''}`}>{value}</p>
-      {hint ? <p className="mt-0.5 text-[11px] text-neutral-400">{hint}</p> : null}
-    </Card>
-  );
-}
-
-function Panel({
+function ChartPanel({
   title,
   note,
   children,

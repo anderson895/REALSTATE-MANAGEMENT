@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
 import { KeyRound, ShieldCheck, UserRound } from 'lucide-react';
 import { ROLE_LABELS, can, isInternalRole, modulesFor } from '@sfsr/domain';
+import { getAdminFirestore, getEmployee } from '@sfsr/infrastructure/server';
 import { requireEmployee } from '@/lib/session';
 import { departmentFor } from '@/lib/navigation';
+import { ChangePassword } from './change-password';
 
 export const metadata: Metadata = { title: 'My Profile' };
 
@@ -17,14 +19,29 @@ export const metadata: Metadata = { title: 'My Profile' };
  * signed in as. `requireEmployee()` is the whole check: everything on this page
  * comes from the caller's own session claims.
  *
- * COST: 0 reads. Every field below is already in the verified session cookie,
- * which is where `proxy.ts` and the Security Rules read the same facts from.
- * Fetching the employee document again would be a round trip to be told what
- * the token already said.
+ * COST: 1 read, and it used to be 0.
+ *
+ * Every field below except one is already in the verified session cookie, which
+ * is where `proxy.ts` and the Security Rules read the same facts from — fetching
+ * the employee document for those would be a round trip to be told what the
+ * token already said.
+ *
+ * `mustChangePassword` is the exception, and the reason is worth knowing.
+ * `EmployeeSession` reads it off the TOKEN, and neither the seed nor User
+ * Management sets it as a custom claim; both write it as a field on the
+ * `employees` document instead. So the session value is `false` for every
+ * account that has ever existed, and the warning it drives has never once
+ * appeared. The document is where the flag actually lives, so that is where
+ * this asks.
  */
 export default async function ProfilePage() {
   const session = await requireEmployee();
   const modules = isInternalRole(session.role) ? modulesFor(session.role) : [];
+
+  const record = await getEmployee(getAdminFirestore(), session.employeeId);
+  // Defaults to TRUE when the record is missing: an account whose document
+  // cannot be found is not one to reassure about its credentials.
+  const mustChangePassword = record?.mustChangePassword ?? true;
 
   /*
    * Whether this account can actually sign anything off.
@@ -107,15 +124,33 @@ export default async function ProfilePage() {
         </dl>
       </section>
 
-      {session.mustChangePassword ? (
-        <p className="mb-6 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <KeyRound className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
-          <span>
-            Your password is still the one issued at seeding. Ask IT to reset it before this
-            system carries live buyer data.
-          </span>
-        </p>
-      ) : null}
+      {/*
+       * Change your own password.
+       *
+       * This page used to say "ask IT to reset it", which was the truth and a
+       * poor one: no screen anywhere changed a password, so
+       * `mustChangePassword` was written by the seed onto all twenty-nine
+       * accounts and by User Management onto every new one, and nothing could
+       * ever clear it.
+       *
+       * Not behind USER_MANAGEMENT, for the same reason the rest of this page
+       * is not — that module governs administering OTHER people. Rotating your
+       * own credential is not an administrative act, and gating it would leave
+       * nine of the ten roles unable to do the one thing Development Plan.md
+       * §12.3 asks of every seeded account.
+       */}
+      <section
+        id="password"
+        className="mb-6 overflow-hidden rounded-xl border border-neutral-200/80 bg-white shadow-sm"
+      >
+        <h2 className="flex items-center gap-2 border-b border-neutral-200/80 px-5 py-3.5 text-[11px] font-bold uppercase tracking-[0.1em] text-navy-800">
+          <KeyRound className="h-3.5 w-3.5 text-navy-700" strokeWidth={2.2} aria-hidden="true" />
+          Password
+        </h2>
+        <div className="px-5 py-4">
+          <ChangePassword mustChange={mustChangePassword} />
+        </div>
+      </section>
 
       <section className="overflow-hidden rounded-xl border border-neutral-200/80 bg-white shadow-sm">
         <h2 className="border-b border-neutral-200/80 px-5 py-3.5 text-[11px] font-bold uppercase tracking-[0.1em] text-navy-800">
