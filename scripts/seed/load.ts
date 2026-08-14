@@ -19,6 +19,8 @@ import { recomputeStats } from './recompute-stats';
 
 const DATA_DIR = join(import.meta.dirname, 'data');
 const DRY_RUN = process.argv.includes('--dry-run');
+/** Write the project documents and nothing else. See main(). */
+const PROJECTS_ONLY = process.argv.includes('--projects-only');
 
 interface ProjectFixture {
   id: string;
@@ -29,6 +31,34 @@ interface ProjectFixture {
   buildingType: string;
   floorsRaw: string;
   theme: string;
+}
+/**
+ * Marketing copy for a project — the half of a project that DATABASE PROJECT.xls
+ * does not carry.
+ *
+ * `projects.json` is GENERATED: `npm run seed:extract` rebuilds it from the
+ * workbook, so anything written into it by hand is gone on the next run. The
+ * workbook holds inventory facts (code, floors, building type) and nothing a
+ * buyer would actually read — no description, no amenities, no location
+ * highlights. Those come from a later client document,
+ * `Condomiium-Project-Description-Amenities.doc`, and so live here instead, in
+ * the same hand-maintained-overlay shape as `employees-sales.json`.
+ *
+ * WATCH OUT: the .doc and the workbook DISAGREE about The Legaspi Place. The
+ * document says 35 floors and "Premium High-Rise Condominium"; the workbook says
+ * 42 and "Premium Mixed-Use High-Rise Condominium", and spells the village
+ * "Legazpi" where the document spells it "Legaspi". The workbook wins here by
+ * decision, not by accident — which is why the merge below is one-directional
+ * and this fixture carries none of those fields. Resolve it with the client
+ * rather than by editing one of the two files to match the other.
+ */
+interface ProjectContentFixture {
+  id: string;
+  buildings: string;
+  description: string[];
+  unitTypeDescriptions: Record<string, string>;
+  amenities: string[];
+  locationHighlights: string[];
 }
 interface UnitFixture {
   id: string;
@@ -103,11 +133,35 @@ async function writeAll(
   return written;
 }
 
+/**
+ * The five project documents, workbook facts merged with the client's copy.
+ *
+ * Split out from `seedInventory` so `--projects-only` can reach it WITHOUT
+ * touching units — see the hazard note on main().
+ */
+async function seedProjects(db: Firestore): Promise<void> {
+  // The generated row is spread LAST, so a key present in both wins from the
+  // workbook. The overlay can therefore only ADD fields, never quietly restate
+  // a floor count or a building type — see ProjectContentFixture.
+  const contentFixtures = load<ProjectContentFixture>('projects-content.json');
+  const content = new Map(contentFixtures.map((c) => [c.id, c]));
+  const projects = load<ProjectFixture>('projects.json').map((p) => ({
+    ...(content.get(p.id) ?? {}),
+    ...p,
+  }));
+
+  const described = projects.filter((p) => 'amenities' in p).length;
+  console.log(`  projects       ${await writeAll(db, 'projects', projects)} (${described} with content)`);
+
+  for (const c of contentFixtures.filter((c) => c.description.length === 0)) {
+    console.log(`  ${' '.repeat(15)}${c.id} has amenities but NO description in the .doc`);
+  }
+}
+
 async function seedInventory(db: Firestore): Promise<void> {
   console.log('\n── Inventory ────────────────────────────────────');
 
-  const projects = load<ProjectFixture>('projects.json');
-  console.log(`  projects       ${await writeAll(db, 'projects', projects)}`);
+  await seedProjects(db);
 
   const units = load<UnitFixture>('units.json');
   console.log(`  units          ${await writeAll(db, 'units', units.map((u) => ({ ...u, currentReservation: null })))}`);
@@ -286,12 +340,52 @@ async function seedEmployees(db: Firestore): Promise<void> {
   console.log(`  username index ${employees.length}`);
 }
 
+/**
+ * Seeds the whole database, or — with `--projects-only` — nothing but the five
+ * project documents.
+ *
+ * ── Why --projects-only exists ────────────────────────────────────────
+ *
+ * A FULL run is only safe against a database nobody has used yet. `units.json`
+ * carries each unit's workbook `status`, and seedInventory writes it back with
+ * `currentReservation: null`, so a full run RESETS live inventory:
+ *
+ *   - a unit sold or held since the last seed goes back to Available
+ *   - its link to the reservation that holds it is set to null
+ *   - the reservation document survives, now pointing at a unit that no longer
+ *     points back — an orphan no screen will show and no query will find
+ *
+ * That is not hypothetical. At the time this flag was added the live database
+ * held 1 reservation, 3 trippings, 4 clients, and unit EU001 sold against a
+ * fixture that still calls it Available. A full re-seed would have quietly
+ * unsold it.
+ *
+ * Project copy changes far more often than inventory does — every time the
+ * client sends a new description or amenity list. `--projects-only` is the flag
+ * for that, and it touches no unit, no reservation and no Auth account.
+ *
+ * `recomputeStats` is skipped too: it only rewrites the denormalised counters,
+ * which a copy edit cannot have changed.
+ */
 async function main(): Promise<void> {
   console.log(
-    `SFSR-REMS seed -> ${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}${DRY_RUN ? '  (DRY RUN)' : ''}`,
+    `SFSR-REMS seed -> ${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}` +
+      `${PROJECTS_ONLY ? '  (PROJECTS ONLY)' : ''}${DRY_RUN ? '  (DRY RUN)' : ''}`,
   );
   initAdmin();
   const db = getFirestore();
+
+  if (PROJECTS_ONLY) {
+    console.log('\n── Projects ─────────────────────────────────────');
+    await seedProjects(db);
+    console.log('\n─────────────────────────────────────────────────');
+    console.log(
+      DRY_RUN
+        ? 'Dry run complete. Nothing was written.'
+        : 'Projects updated. Units, reservations and accounts were not touched.',
+    );
+    return;
+  }
 
   await seedInventory(db);
   await seedSalesOrg(db);

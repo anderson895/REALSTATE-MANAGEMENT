@@ -52,6 +52,22 @@ export default async function ProjectPage({
   const hasTower = allUnits.some((u) => u.tower !== null);
   const filtered = Boolean(filters.tower ?? filters.unitType ?? filters.status);
 
+  // Types this project actually sells, paired with the client's copy for them.
+  //
+  // Driven by `stats.unitTypes` rather than by the copy's own keys, so a type
+  // the client wrote a blurb for but stopped selling does not reappear here as
+  // an advertisement for something unbuyable. The fallback matters for The
+  // Legaspi Place, which has copy and amenities but no seeded inventory yet —
+  // without it that project would show no unit types at all.
+  const sellingTypes =
+    project.stats.unitTypes.length > 0
+      ? project.stats.unitTypes
+      : Object.keys(project.unitTypeDescriptions);
+
+  const unitTypesWithCopy = sellingTypes
+    .map((unitType) => [unitType, project.unitTypeDescriptions[unitType]] as const)
+    .filter((entry): entry is readonly [string, string] => Boolean(entry[1]));
+
   return (
     <div className="mx-auto max-w-5xl px-6 py-10">
       {project.heroImageUrl ? (
@@ -74,6 +90,7 @@ export default async function ProjectPage({
           <Detail label="Project code" value={project.code} />
           <Detail label="Building type" value={project.buildingType || '—'} />
           <Detail label="Floors" value={project.floors || '—'} />
+          {project.buildings ? <Detail label="Buildings" value={project.buildings} /> : null}
           <Detail label="Developer" value={project.developer || '—'} />
           <Detail
             label="Availability"
@@ -81,6 +98,111 @@ export default async function ProjectPage({
           />
         </dl>
       </header>
+
+      {/*
+       * Everything from here to the floor plans is the client's marketing copy,
+       * and EVERY section of it is conditional.
+       *
+       * That is not defensive habit — the source document genuinely does not
+       * cover all five projects equally. Emerald Park has fifteen amenities and
+       * no description at all; The Legaspi Place has no floor plans. Rendering
+       * an "About this project" heading above nothing is worse than omitting
+       * the section, so each one asks whether it has content first.
+       *
+       * Order follows the layout sketched at the end of the client's document:
+       * about, unit types, amenities, then floor plans.
+       */}
+      {project.description.length > 0 ? (
+        <section className="mb-8">
+          <h2 className="mb-3 text-sm font-medium">About this project</h2>
+          <div className="space-y-3 text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+            {project.description.map((paragraph) => (
+              <p key={paragraph.slice(0, 40)}>{paragraph}</p>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {unitTypesWithCopy.length > 0 ? (
+        <section className="mb-8">
+          <h2 className="mb-3 text-sm font-medium">Unit types available</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {unitTypesWithCopy.map(([unitType, copy]) => (
+              <div
+                key={unitType}
+                className="rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
+              >
+                <h3 className="text-sm font-semibold">{unitType}</h3>
+                <p className="mt-1 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
+                  {copy}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {project.amenities.length > 0 || project.amenitiesImageUrl ? (
+        <section className="mb-8">
+          <h2 className="mb-3 text-sm font-medium">Amenities &amp; facilities</h2>
+
+          {project.amenities.length > 0 ? (
+            <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-neutral-600 sm:grid-cols-3 dark:text-neutral-400">
+              {project.amenities.map((amenity) => (
+                <li key={amenity} className="flex items-start gap-1.5">
+                  <span aria-hidden="true" className="mt-1.5 size-1 shrink-0 rounded-full bg-brand-500" />
+                  {amenity}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {/*
+           * The poster carries its own labels as pixels, so it is the decorative
+           * half of this section and the list above is the readable one. It is
+           * announced as a link to the full-size image rather than given a
+           * transcript in `alt`: the list IS the transcript, and it is already
+           * on the page.
+           */}
+          {project.amenitiesImageUrl ? (
+            <a
+              href={cloudinaryUrl(project.amenitiesImageUrl, { width: 1536 })}
+              target="_blank"
+              rel="noreferrer"
+              className="group mt-4 block overflow-hidden rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
+            >
+              <div className="relative aspect-[3/2] bg-neutral-50 dark:bg-neutral-800">
+                <Image
+                  src={cloudinaryUrl(project.amenitiesImageUrl, { width: 1024 })}
+                  alt={`${project.name} amenities and facilities overview`}
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 1024px"
+                  className="object-contain"
+                />
+              </div>
+              <p className="border-t border-neutral-100 px-3 py-1.5 text-center text-xs text-neutral-500 group-hover:text-brand-700 dark:border-neutral-800">
+                Open the full amenities sheet →
+              </p>
+            </a>
+          ) : null}
+        </section>
+      ) : null}
+
+      {project.locationHighlights.length > 0 ? (
+        <section className="mb-8">
+          <h2 className="mb-3 text-sm font-medium">Nearby &amp; accessible</h2>
+          <ul className="flex flex-wrap gap-1.5">
+            {project.locationHighlights.map((highlight) => (
+              <li
+                key={highlight}
+                className="rounded-full border border-neutral-200 px-2.5 py-1 text-xs text-neutral-600 dark:border-neutral-800 dark:text-neutral-400"
+              >
+                {highlight}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {Object.keys(project.floorPlans).length > 0 ? (
         <section className="mb-8">

@@ -1,0 +1,214 @@
+[
+  {
+    "id": "TLP001",
+    "buildings": "1 Tower",
+    "description": [
+      "The Legaspi Place is a residential condominium development located in Legaspi Village, Makati City. Its location provides residents with convenient access to Makati's business and lifestyle destinations while maintaining a comfortable residential environment.",
+      "Designed for professionals, couples, families, and property investors, The Legaspi Place offers a selection of residential units supported by essential building facilities and amenities. Its strategic location makes it suitable for residents who value accessibility, convenience, and urban living.",
+      "The project can also serve as a practical investment option for buyers looking for a residential property within Makati's established business and commercial environment."
+    ],
+    "unitTypeDescriptions": {
+      "Studio": "A practical and efficient unit designed for individuals, young professionals, and investors looking for a convenient Makati address.",
+      "One Bedroom": "A comfortable residential unit with a separate bedroom, ideal for individuals or couples.",
+      "Two Bedroom": "A spacious unit suitable for small families or buyers who need additional living and working space.",
+      "Three Bedroom": "A larger residential unit designed for families who value additional bedrooms and generous living space."
+    },
+    "amenities": [
+      "Main Lobby",
+      "Swimming Pool",
+      "Fitness Center",
+      "Function Room",
+      "Residents' Lounge",
+      "Landscaped Areas",
+      "Children's Play Area",
+      "Outdoor Lounge",
+      "Multi-Purpose Area",
+      "24-Hour Security",
+      "CCTV Monitoring",
+      "Passenger Elevators",
+      "Fire Detection and Alarm System",
+      "Emergency Power Supply",
+      "Parking Facilities"
+    ],
+    "locationHighlights": [
+      "Makati Central Business District",
+      "Legaspi Village",
+      "Greenbelt Area",
+      "Makati commercial establishments",
+      "Restaurants and cafés",
+      "Shopping centers",
+      "Parks and recreational areas",
+      "Makati Medical Center",
+      "Major transportation routes"
+    ]
+  },
+  {
+    "id": "EPR002",
+    "buildings": "1 Tower",
+    "description": [],
+    "unitTypeDescriptions": {
+      "Studio": "A practical and efficient space ideal for professionals, students, and investors.",
+      "One Bedroom": "A comfortable unit designed for individuals or couples who prefer a separate bedroom.",
+      "Two Bedroom": "A spacious home suitable for small families or buyers who need additional living space.",
+      "Three Bedroom": "A larger residential space designed for families who need more bedrooms and living areas."
+    },
+    "amenities": [
+      "Grand Lobby",
+      "Swimming Pool",
+      "Landscaped Garden",
+      "Function Room",
+      "Fitness Center",
+      "Children's Play Area",
+      "Outdoor Lounge",
+      "Jogging Area",
+      "Multi-Purpose Court",
+      "Residents' Lounge",
+      "24-Hour Security",
+      "CCTV Monitoring",
+      "Passenger Elevators",
+      "Fire Detection and Alarm System",
+      "Parking Facilities"
+    ],
+    "locationHighlights": [
+      "ASEANA Business District",
+      "Entertainment and Lifestyle Areas",
+      "Shopping Centers",
+      "Restaurants and Cafés",
+      "Major Transportation Routes",
+      "NAIA Airport Access",
+      "Business and Commercial Establishments"
+    ]
+  },
+  {
+    "id": "SQR003",
+    "buildings": "2 Towers",
+    "description": [
+      "Skyline Quarter Residences brings residential living closer to the center of business and lifestyle in Ortigas. Its twin-tower design offers modern residential spaces complemented by amenities intended for relaxation, fitness, work, and social activities.",
+      "The project is strategically positioned for residents who value accessibility to offices, shopping centers, restaurants, schools, and major transportation routes."
+    ],
+    "unitTypeDescriptions": {
+      "Studio": "A compact and functional space ideal for individuals and property investors.",
+      "One Bedroom": "A comfortable home with a separate bedroom and living area.",
+      "Two Bedroom": "Designed for couples and small families who need more space.",
+      "Three Bedroom": "A spacious family-oriented unit with additional rooms for comfort and flexibility."
+    },
+    "amenities": [
+      "Main Lobby",
+      "Swimming Pool",
+      "Fitness Center",
+      "Function Room",
+      "Business Lounge",
+      "Residents' Lounge",
+      "Landscaped Open Areas",
+      "Children's Play Area",
+      "Outdoor Seating Areas",
+      "Jogging Path",
+      "Multi-Purpose Area",
+      "24-Hour Security",
+      "CCTV Monitoring",
+      "Passenger Elevators",
+      "Fire Safety System",
+      "Parking Facilities"
+    ],
+    "locationHighlights": [
+      "Ortigas Business District",
+      "Shopping Malls",
+      "Restaurants and Cafés",
+      "Corporate Offices",
+      "Schools and Universities",
+      "Hospitals and Medical Centers",
+      "Major Transportation Routes",
+      "Entertainment and Lifestyle Establishments"
+    ]
+  },
+  {
+    "id": "GVR004",
+    "buildings": "1 Tower",
+    "description": [
+      "Grand Verdant Residences is a luxury residential condominium designed for residents who want to experience modern city living without giving up the comfort of green spaces. Located in Bonifacio Global City, the project provides convenient access to offices, shopping destinations, restaurants, schools, and entertainment establishments.",
+      "The development combines contemporary architecture, thoughtfully planned residential units, landscaped areas, and premium amenities to create a comfortable urban lifestyle."
+    ],
+    "unitTypeDescriptions": {
+      "Studio": "A modern and efficient space ideal for professionals and investors.",
+      "One Bedroom": "A comfortable residential space designed for individuals or couples.",
+      "Two Bedroom": "A spacious option for small families or residents who require additional rooms.",
+      "Three Bedroom": "A premium family residence providing generous living and private spaces."
+    },
+    "amenities": [
+      "Luxury Grand Lobby",
+      "Infinity Pool",
+      "Landscaped Gardens",
+      "Fitness Center",
+      "Function Room",
+      "Residents' Lounge",
+      "Business Lounge",
+      "Yoga Area",
+      "Children's Play Area",
+      "Outdoor Garden",
+      "Jogging Path",
+      "BBQ Area",
+      "Multi-Purpose Room",
+      "24-Hour Security",
+      "CCTV Monitoring",
+      "Passenger Elevators",
+      "Fire Safety System",
+      "Parking Facilities"
+    ],
+    "locationHighlights": [
+      "Bonifacio Global City",
+      "Corporate Offices",
+      "High Street Lifestyle District",
+      "Restaurants and Cafés",
+      "Shopping Centers",
+      "Schools",
+      "Hospitals",
+      "Parks and Open Spaces",
+      "Major Transportation Routes"
+    ]
+  },
+  {
+    "id": "HPR004",
+    "buildings": "1 Tower",
+    "description": [
+      "Harbor Point Residences is a high-rise residential condominium designed for individuals and families who appreciate modern living with convenient access to the city and bay area. Its location along Roxas Boulevard provides residents with access to commercial establishments, entertainment destinations, transportation routes, and nearby business districts.",
+      "The project combines contemporary residential design with lifestyle amenities and selected spaces that allow residents to enjoy a relaxing urban environment."
+    ],
+    "unitTypeDescriptions": {
+      "Studio": "An efficient residential space suitable for individuals, young professionals, and investors.",
+      "One Bedroom": "A comfortable unit designed for individuals or couples looking for a private bedroom.",
+      "Two Bedroom": "A spacious home suitable for small families and residents who need additional space.",
+      "Three Bedroom": "A larger family residence designed for comfortable long-term living."
+    },
+    "amenities": [
+      "Grand Lobby",
+      "Swimming Pool",
+      "Bay-view Lounge",
+      "Fitness Center",
+      "Function Room",
+      "Landscaped Garden",
+      "Outdoor Lounge",
+      "Children's Play Area",
+      "Jogging Path",
+      "BBQ Area",
+      "Multi-Purpose Court",
+      "Residents' Lounge",
+      "24-Hour Security",
+      "CCTV Monitoring",
+      "Passenger Elevators",
+      "Fire Safety System",
+      "Parking Facilities"
+    ],
+    "locationHighlights": [
+      "Roxas Boulevard",
+      "Manila Bay",
+      "Entertainment District",
+      "Shopping Centers",
+      "Restaurants and Cafés",
+      "Schools",
+      "Hospitals",
+      "NAIA Airport Access",
+      "Major Transportation Routes",
+      "Business Districts"
+    ]
+  }
+]

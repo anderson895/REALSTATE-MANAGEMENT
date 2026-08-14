@@ -48,16 +48,35 @@ import {
  */
 const BROWSE_TTL_SECONDS = 600;
 
+/**
+ * Bump this whenever a FIELD IS ADDED TO `ProjectSummary`.
+ *
+ * The cache stores the mapped object, not the Firestore document, so an entry
+ * written by an older build keeps that older SHAPE until its TTL expires — a
+ * new field is simply absent from it, and `toSummary`'s `?? {}` fallbacks never
+ * get the chance to run because they already ran, in the previous deployment.
+ *
+ * Discovered the hard way: adding `unitTypeDescriptions` crashed the project
+ * page with "Cannot read properties of undefined (reading 'One Bedroom')" while
+ * serving from a cache entry that predated the field. Ten minutes of 500s on
+ * every project page, from a change that built and typechecked cleanly —
+ * TypeScript cannot see across a cache boundary, so the type says the field is
+ * always there and the runtime disagrees.
+ *
+ * Changing the key parts makes old entries unreachable rather than stale.
+ */
+const PROJECT_SHAPE_VERSION = 'v2';
+
 export const getCachedProjects = unstable_cache(
   async (): Promise<ProjectSummary[]> => listProjects(getAdminFirestore()),
-  ['catalog', 'projects'],
+  ['catalog', 'projects', PROJECT_SHAPE_VERSION],
   { revalidate: BROWSE_TTL_SECONDS, tags: ['projects'] },
 );
 
 export const getCachedProject = unstable_cache(
   async (projectId: string): Promise<ProjectSummary | null> =>
     getProject(getAdminFirestore(), projectId),
-  ['catalog', 'project'],
+  ['catalog', 'project', PROJECT_SHAPE_VERSION],
   { revalidate: BROWSE_TTL_SECONDS, tags: ['projects'] },
 );
 

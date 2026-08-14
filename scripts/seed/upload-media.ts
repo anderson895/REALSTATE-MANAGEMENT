@@ -33,15 +33,32 @@ interface ProjectMedia {
   readonly hero: string | null;
   /** Only the unit types that actually have a plan on disk. */
   readonly floorPlans: Partial<Record<UnitType, string>>;
+  /**
+   * The client's "Amenities & Facilities" poster, as a path relative to
+   * SOURCE_ROOT rather than to `folder`.
+   *
+   * These arrived later and all sit together in `new/`, not in the per-project
+   * folders — and their names are Facebook export ids, so nothing about
+   * "773508367_801866502988682_..." says which project it belongs to. They are
+   * mapped by eye, from the project name printed on each poster.
+   *
+   * The page renders the structured `amenities` list from
+   * projects-content.json as well as this image, deliberately: the poster is a
+   * wide desktop graphic whose labels are baked into the pixels, so on a phone
+   * it is decoration and the list is the content.
+   */
+  readonly amenities: string | null;
 }
 
 const MEDIA: readonly ProjectMedia[] = [
   {
-    // The Legaspi Place has no asset folder at all (§12.10).
+    // The Legaspi Place still has no floor plans and no render of its own
+    // (§12.10) — the amenities poster below is the first asset it has ever had.
     projectId: 'TLP001',
     folder: '',
     hero: null,
     floorPlans: {},
+    amenities: 'new/768358017_837576299444938_1702286669090552636_n.png',
   },
   {
     projectId: 'EPR002',
@@ -53,6 +70,7 @@ const MEDIA: readonly ProjectMedia[] = [
       'Two Bedroom': '2BR-EMERALDPARK.png',
       'Three Bedroom': '3BR-EMERALDPARK.png',
     },
+    amenities: 'new/772663524_1786017318985338_7123392930329951427_n.png',
   },
   {
     projectId: 'SQR003',
@@ -64,6 +82,7 @@ const MEDIA: readonly ProjectMedia[] = [
       'Two Bedroom': '2BR-SKYLINE.png',
       'Three Bedroom': '3BR-SKYLINE.png',
     },
+    amenities: 'new/773290687_973740899055986_1377260956167178773_n.png',
   },
   {
     projectId: 'GVR004',
@@ -75,6 +94,7 @@ const MEDIA: readonly ProjectMedia[] = [
       'Two Bedroom': '2BR-GRANDVERDANT.png',
       'Three Bedroom': '3BR-GRANDVERDANT.png',
     },
+    amenities: 'new/773508367_801866502988682_5578232515397658329_n.png',
   },
   {
     projectId: 'HPR004',
@@ -86,6 +106,7 @@ const MEDIA: readonly ProjectMedia[] = [
       'Two Bedroom': '2BR-HARBORPOINT.png',
       // No 3BR plan on disk, although the project sells Three Bedroom units (§12.11).
     },
+    amenities: 'new/771892037_2001826807352062_9174657905878584655_n.png',
   },
 ];
 
@@ -171,9 +192,30 @@ async function main(): Promise<void> {
       console.log(`   ${unitType.padEnd(14)}${filename}`);
     }
 
+    // Relative to SOURCE_ROOT, not `base` — the posters live in one shared
+    // folder, and TLP001 has no `folder` of its own to be relative to.
+    let amenitiesUrl: string | null = null;
+    if (project.amenities) {
+      const path = join(SOURCE_ROOT, project.amenities);
+      if (existsSync(path)) {
+        bytes += statSync(path).size;
+        amenitiesUrl = await upload(path, `sfsr/projects/${project.projectId}/amenities`);
+        uploaded++;
+        console.log(`   amenities     ${project.amenities}`);
+      } else {
+        console.log(`   amenities     MISSING: ${project.amenities}`);
+        missing++;
+      }
+    }
+
     if (!DRY_RUN) {
       await db.collection('projects').doc(project.projectId).set(
-        { heroImageUrl: heroUrl, floorPlans: planUrls, mediaUpdatedAt: FieldValue.serverTimestamp() },
+        {
+          heroImageUrl: heroUrl,
+          floorPlans: planUrls,
+          amenitiesImageUrl: amenitiesUrl,
+          mediaUpdatedAt: FieldValue.serverTimestamp(),
+        },
         { merge: true },
       );
     }

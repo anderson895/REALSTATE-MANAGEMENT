@@ -49,6 +49,23 @@ export interface ProjectSummary {
   readonly heroImageUrl: string | null;
   readonly floorPlans: Readonly<Record<string, string>>;
   readonly stats: ProjectStats;
+
+  /**
+   * Marketing copy, seeded from `projects-content.json`.
+   *
+   * All of it is optional at the type level in the sense that every field has an
+   * empty fallback below, because these arrive from a client document that does
+   * not cover every project equally — Emerald Park, for one, has amenities and
+   * no description at all. A page that renders these must therefore branch on
+   * emptiness rather than assume presence, or it will show an "About" heading
+   * with nothing under it.
+   */
+  readonly buildings: string;
+  readonly description: readonly string[];
+  readonly unitTypeDescriptions: Readonly<Record<string, string>>;
+  readonly amenities: readonly string[];
+  readonly locationHighlights: readonly string[];
+  readonly amenitiesImageUrl: string | null;
 }
 
 const EMPTY_STATS: ProjectStats = {
@@ -76,6 +93,12 @@ function toSummary(id: string, raw: FirebaseFirestore.DocumentData): ProjectSumm
     heroImageUrl: raw.heroImageUrl ? String(raw.heroImageUrl) : null,
     floorPlans: (raw.floorPlans ?? {}) as Record<string, string>,
     stats: { ...EMPTY_STATS, ...((raw.stats ?? {}) as Partial<ProjectStats>) },
+    buildings: String(raw.buildings ?? ''),
+    description: (raw.description ?? []) as string[],
+    unitTypeDescriptions: (raw.unitTypeDescriptions ?? {}) as Record<string, string>,
+    amenities: (raw.amenities ?? []) as string[],
+    locationHighlights: (raw.locationHighlights ?? []) as string[],
+    amenitiesImageUrl: raw.amenitiesImageUrl ? String(raw.amenitiesImageUrl) : null,
   };
 }
 

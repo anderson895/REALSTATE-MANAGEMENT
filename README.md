@@ -163,9 +163,44 @@ node --env-file=.env.local --import tsx scripts/seed/load.ts --dry-run
 npm run seed:load                                      # writes Firestore + Auth
 ```
 
-`load.ts` is idempotent — every write is keyed by its source id and merged, so
-running it twice produces the same database rather than duplicates. Passwords
-from the workbook are used **once**, to create the Auth user, and never stored.
+`load.ts` is idempotent in the sense that matters for a *fresh* database — every
+write is keyed by its source id and merged, so running it twice creates no
+duplicates. Passwords from the workbook are used **once**, to create the Auth
+user, and never stored.
+
+> **A full `seed:load` is not safe once the system has been used.** `units.json`
+> carries each unit's workbook `status`, and the loader writes it back with
+> `currentReservation: null` — so a unit sold or held since the last seed goes
+> back to Available, its link to the reservation holding it is cleared, and that
+> reservation survives as an orphan pointing at a unit that no longer points
+> back. Use `--projects-only` for content changes:
+
+```bash
+node --env-file=.env.local --import tsx scripts/seed/load.ts --projects-only
+```
+
+That writes the five project documents and touches no unit, reservation or
+account.
+
+### Where a project's content comes from
+
+Two sources, merged at load time:
+
+| Source | Carries | Maintained |
+|---|---|---|
+| `projects.json` | code, floors, building type, developer | **Generated** by `seed:extract` from `DATABASE PROJECT.xls` |
+| `projects-content.json` | description, amenities, location highlights, unit-type copy | **By hand**, from the client's description/amenities `.doc` |
+
+The generated row is merged **last**, so the overlay can only add fields — it
+cannot restate a floor count. That is load-bearing: the `.doc` and the workbook
+disagree about The Legaspi Place (35 floors versus 42, and a differently spelled
+Legaspi/Legazpi Village), and the workbook wins by decision. Resolve it with the
+client rather than by editing one file to match the other.
+
+Amenity posters live in `CONDOMINIUM PROJECTS/new/` and are uploaded by
+`upload-media.ts`. The project page renders the structured amenity list *and*
+the poster: the poster's labels are baked into the pixels, so on a phone it is
+decoration and the list is the content.
 
 > `seed:extract` requires Windows and the ACE.OLEDB provider; it reads legacy
 > `.xls` files. Two roles have no personnel sheet in the workbook at all, so
