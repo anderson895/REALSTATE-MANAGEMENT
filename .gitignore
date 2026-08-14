@@ -47,3 +47,8 @@ yarn-error.log*
 *.tsbuildinfo
 # ── Kept out of the repo by the project owner ─────────────────────────────
 instruction.txt
+# Defense preparation, not part of the system. Listed rather than merely left
+# uncommitted because this repository is committed with `git add .`-style
+# "update" commits, which would otherwise sweep them in unnoticed.
+Questions.doc
+Questions-Answered.doc

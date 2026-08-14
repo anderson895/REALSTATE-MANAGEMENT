@@ -3,8 +3,35 @@ import { getAdminFirestore } from '@sfsr/infrastructure/server';
 import { Card, PageHeader } from '@sfsr/ui';
 import { requireClient } from '@/lib/session';
 import { ChangePassword } from './change-password';
+import { EditProfile } from './edit-profile';
+import { Tabs } from './tabs';
 
 export const metadata: Metadata = { title: 'My Profile' };
+
+/**
+ * `<input type="date">` reads and writes `YYYY-MM-DD` and silently shows an
+ * empty field for anything else.
+ *
+ * Registration writes that string straight through, so most records already
+ * hold it — but a Firestore Timestamp appears in records created at the walk-in
+ * counter, and `toISOString()` would shift a date near midnight into the
+ * previous day for a buyer in UTC+8. Formatting from the LOCAL parts avoids
+ * that: nobody's birthday should move because of a timezone.
+ */
+function toDateInputValue(value: unknown): string {
+  if (value == null) return '';
+
+  const date =
+    typeof (value as { toDate?: () => Date }).toDate === 'function'
+      ? (value as { toDate: () => Date }).toDate()
+      : new Date(String(value));
+
+  if (Number.isNaN(date.getTime())) return '';
+
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
 
 export default async function ProfilePage() {
   const session = await requireClient();
@@ -13,38 +40,42 @@ export default async function ProfilePage() {
   const doc = await getAdminFirestore().collection('clients').doc(session.uid).get();
   const data = doc.data() ?? {};
 
-  const fullName = [data.firstName, data.middleName, data.lastName, data.suffix]
-    .filter(Boolean)
-    .join(' ');
-
-  const dateOfBirth = data.dateOfBirth
-    ? new Date(String(data.dateOfBirth)).toLocaleDateString('en-PH', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      })
-    : '—';
-
   const consentedAt = data.consent?.acceptedAt?.toDate?.() as Date | undefined;
 
-  return (
-    <div className="mx-auto max-w-3xl px-6 py-10">
-      <PageHeader
-        title="My Profile"
-        description="The details on your account. Your username is permanent and cannot be changed."
-      />
-
+  /*
+   * Both panels are built here, as ordinary server markup, and handed to the
+   * client `Tabs` component. Only the switching needs to be client-side — see
+   * the note in tabs.tsx.
+   *
+   * Account and Data privacy both sit with Personal information, and the
+   * security tab holds one form.
+   *
+   * Data privacy was briefly filed under security, on the reasoning that
+   * privacy and security are adjacent. They are, but that is not how the card
+   * reads: "You consented to the processing of YOUR PERSONAL INFORMATION" is a
+   * statement ABOUT the fields directly above it, not a control the buyer
+   * operates. Everything in the security tab is something you DO; the consent
+   * notice is something that IS. A buyer looking for what happens to their data
+   * looks under their data.
+   */
+  const personal = (
+    <>
       <Card className="mb-6">
         <h2 className="border-b border-neutral-200 px-5 py-3 text-sm font-medium dark:border-neutral-800">
-          Personal information
+          Your details
         </h2>
-        <dl className="divide-y divide-neutral-100 text-sm dark:divide-neutral-800">
-          <Row label="Full name" value={fullName || '—'} />
-          <Row label="Date of birth" value={dateOfBirth} />
-          <Row label="Sex" value={String(data.sex ?? '—')} />
-          <Row label="Mobile number" value={String(data.mobile ?? '—')} />
-          <Row label="Email address" value={String(data.email ?? '—')} />
-        </dl>
+        <EditProfile
+          initial={{
+            firstName: String(data.firstName ?? ''),
+            middleName: String(data.middleName ?? ''),
+            lastName: String(data.lastName ?? ''),
+            suffix: String(data.suffix ?? ''),
+            dateOfBirth: toDateInputValue(data.dateOfBirth),
+            sex: String(data.sex ?? ''),
+            mobile: String(data.mobile ?? ''),
+          }}
+          email={String(data.email ?? '—')}
+        />
       </Card>
 
       <Card className="mb-6">
@@ -71,13 +102,6 @@ export default async function ProfilePage() {
         </dl>
       </Card>
 
-      <Card className="mb-6">
-        <h2 className="border-b border-neutral-200 px-5 py-3 text-sm font-medium dark:border-neutral-800">
-          Password
-        </h2>
-        <ChangePassword />
-      </Card>
-
       <Card>
         <h2 className="border-b border-neutral-200 px-5 py-3 text-sm font-medium dark:border-neutral-800">
           Data privacy
@@ -101,6 +125,31 @@ export default async function ProfilePage() {
           </p>
         </div>
       </Card>
+    </>
+  );
+
+  const security = (
+    <Card>
+      <h2 className="border-b border-neutral-200 px-5 py-3 text-sm font-medium dark:border-neutral-800">
+        Change password
+      </h2>
+      <ChangePassword />
+    </Card>
+  );
+
+  return (
+    <div className="mx-auto max-w-3xl px-6 py-10">
+      <PageHeader
+        title="My Profile"
+        description="Keep your details up to date. Your username and email address are permanent and cannot be changed."
+      />
+
+      <Tabs
+        tabs={[
+          { id: 'personal', label: 'Personal information', content: personal },
+          { id: 'security', label: 'Password & security', content: security },
+        ]}
+      />
     </div>
   );
 }

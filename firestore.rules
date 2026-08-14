@@ -125,7 +125,25 @@ service cloud.firestore {
                   || hasRole(['DOCUMENTATION', 'LOAN_OFFICER',
                               'LEGAL_COUNSEL', 'ACCOUNT_RECEIVABLES']);
       allow create: if owns(clientUid);
-      allow update: if owns(clientUid) || hasRole(['DOCUMENTATION']);
+      /*
+       * A buyer may NOT write their own record from the browser.
+       *
+       * This used to read `owns(clientUid) || hasRole(['DOCUMENTATION'])`, and
+       * the first half granted a permission nothing in the system uses: the
+       * client SDK exposes only `getClientApp` and `getClientAuth`, never
+       * Firestore, so every write already goes through the Admin SDK on the
+       * server. What it DID grant was reach to anyone willing to skip the form —
+       * the Firebase web config is NEXT_PUBLIC_ by design, so a signed-in buyer
+       * can build their own Firestore client with it.
+       *
+       * That began to matter once the profile became editable. The name lock,
+       * the minimum-age rule and the audit entry all live in the
+       * `updateProfile` server action; a direct write would have gone round all
+       * three and renamed an account whose ID a verifier had already approved.
+       * A control that can be skipped by not using the form is not a control
+       * (Development Plan.md §3.3).
+       */
+      allow update: if hasRole(['DOCUMENTATION']);
       // Client records are retained for audit — never deleted from a client.
       allow delete: if false;
     }

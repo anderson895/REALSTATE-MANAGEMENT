@@ -290,3 +290,29 @@ export const announcementArchived = (
     announcementId,
     archivedBy: by.value,
   });
+
+// ── Clients ──────────────────────────────────────────────────────────────────
+
+/**
+ * A buyer edited their own profile.
+ *
+ * Carries BOTH sides of every field that moved, not just the new value. The
+ * question this log exists to answer is not "what does the account say now" —
+ * the client document already answers that — but "what did it say when
+ * Documentation Staff checked the government ID against it". A verifier
+ * approved a name; if that name later changes, the approval has to stay
+ * legible.
+ *
+ * The actor is the buyer's own id rather than an EmployeeId: this is the one
+ * audited action in the system that a CLIENT performs on their own record.
+ */
+export const clientProfileUpdated = (
+  client: ClientId,
+  changes: Readonly<Record<string, { readonly from: unknown; readonly to: unknown }>>,
+  at: Date,
+): DomainEvent =>
+  event('client.profileUpdated', at, {
+    clientId: client.value,
+    fields: Object.keys(changes),
+    changes,
+  });
