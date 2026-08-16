@@ -278,6 +278,27 @@ otherwise hit as a stack trace: Node present, `.env.local` present, dependencies
 installed, and a production build available — building one only if
 `apps/internal/.next` is missing, or if passed `--rebuild`.
 
+### Opening it as an application
+
+`create-internal-shortcut.bat` puts a desktop shortcut on the machine that
+opens the system in a chromeless browser window — no address bar, no tabs, the
+company logo on the icon and in the taskbar. Run it once per machine:
+
+```bat
+create-internal-shortcut.bat                        :: the URL set inside it
+create-internal-shortcut.bat https://your-address   :: or one you pass
+```
+
+The icon is `apps/internal/public/sfsr-internal.ico`, generated from the same
+`public/logo.png` the sidebar draws, so the two cannot drift. The window's
+taskbar icon comes from `app/icon.png` instead — in app mode the browser takes
+it from the site's favicon, not from the shortcut, so both are needed.
+
+> **The shortcut is not a security control.** It only opens a URL, and the same
+> URL in any browser reaches the same page. What restricts access is the
+> employee login and the RBAC matrix behind it. If the system is ever hosted
+> rather than run locally, that is the layer to strengthen — not this file.
+
 ---
 
 ## 6. Declared but not yet wired

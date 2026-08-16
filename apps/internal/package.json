@@ -38,9 +38,10 @@
     "@types/react-dom": "^19.2.4",
     "postcss": "^8.5.25",
     "tailwindcss": "^4.3.3",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
   },
-  "comment:devDependencies": "Same as the portal, and for the same reason — see the note there. This app is not deployed to Vercel, but a build run from apps/internal on a machine that installed only this workspace fails identically, and the two apps giving different answers to the same question is how one of them quietly stops building.",
+  "comment:devDependencies": "Same as the portal, and for the same reason — see the note there. This app is not deployed to Vercel, but a build run from apps/internal on a machine that installed only this workspace fails identically, and the two apps giving different answers to the same question is how one of them quietly stops building. That prediction came true: `vitest` was missing from this list, and a standalone build got as far as 'Compiled successfully' before dying on ten `Cannot find module 'vitest'` errors — because tsconfig includes `**/*.ts`, so `next build` typechecks tests/ along with the app. The portal has no tests/ directory, which is the only reason it never showed the same failure. Keep the version in step with the root: two copies of a test runner is a slow install, and two DIFFERENT copies is a suite that passes in one place and not the other.",
   "engines": {
     "node": "22.x"
   },
