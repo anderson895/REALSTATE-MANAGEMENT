@@ -27,6 +27,7 @@ import { ConfirmSubmit } from '../confirm-submit';
 import { ActionNotice } from '../notice';
 import { LifecycleStepper, ReservationBadge } from '../status';
 import { VerificationTrail } from '../trail';
+import { VerifyId } from './verify-id';
 
 /**
  * One reservation, with the evidence and the decision on the same screen.
@@ -258,12 +259,27 @@ export default async function ReservationDetailPage({
                       </p>
                     ) : null}
 
+                    <FormatCheck check={doc.formatCheck} idType={doc.idType} />
                     <NameCheck check={doc.nameCheck} buyerName={buyerName} />
 
                     <div className="grid gap-4 sm:grid-cols-2">
                       <AssetPreview file={doc.frontFile} label="Front" />
                       <AssetPreview file={doc.backFile} label="Back" />
                     </div>
+
+                    {/* Offered only where there is a card to read. */}
+                    {doc.frontFile ? (
+                      <VerifyId
+                        reservationNumber={reservation.number}
+                        documentId={doc.id}
+                        frontUrl={signedUrlFor(doc.frontFile.publicId, { width: 1400 })}
+                        backUrl={
+                          doc.backFile ? signedUrlFor(doc.backFile.publicId, { width: 1400 }) : null
+                        }
+                        idType={doc.idType}
+                        registeredName={buyerName}
+                      />
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -485,6 +501,66 @@ function AssetPreview({ file, label }: { file: UploadedFileRef | null; label: st
         </a>
       )}
     </figure>
+  );
+}
+
+/**
+ * Whether the upload read as an identity document, and as the RIGHT one.
+ *
+ * note.txt: "ibalik yung OCR sa internal, dapat maveverify kung tama yung
+ * format ng ID na inupload niya."
+ *
+ * This is Stage 1 of the same check `NameCheck` shows Stage 2 of, and it was
+ * the half being thrown away: the buyer's browser computed it, refused to
+ * submit on it, and told Documentation nothing.
+ *
+ * ── Why the source is stated ─────────────────────────────────────────────
+ *
+ * A verdict from the buyer's own machine and a verdict a named reviewer ran
+ * are not the same evidence, and a panel of one colour would present them as
+ * if they were. `checkedBy` is set only by the button below, so its presence is
+ * what separates "reported" from "verified here".
+ *
+ * Renders nothing when no check has run — a walk-in ID has none until somebody
+ * presses the button, and an empty panel would suggest a check that passed.
+ */
+function FormatCheck({
+  check,
+  idType,
+}: {
+  check: ReservationDocument['formatCheck'];
+  idType: string | null;
+}) {
+  if (!check) return null;
+
+  const tone =
+    check.verdict === 'match'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+      : check.verdict === 'mismatch'
+        ? 'border-rose-200 bg-rose-50 text-rose-900'
+        : 'border-amber-200 bg-amber-50 text-amber-900';
+
+  const headline =
+    check.looksLikeId === false
+      ? 'This does not read as an identity document'
+      : check.idTypeMatch === false
+        ? `Reads as ${check.detectedId ?? 'a different card'}, not ${idType ?? 'the selected type'}`
+        : check.idTypeMatch === true
+          ? `Reads as ${idType ?? 'the selected type'}`
+          : 'Too little text to judge the format';
+
+  return (
+    <div className={`mb-3 rounded-md border px-3 py-2 text-xs ${tone}`}>
+      <p className="font-semibold">{headline}</p>
+      <p className="mt-0.5 opacity-90">
+        {check.checkedBy
+          ? `Checked here by ${check.checkedBy}${check.checkedAt ? ` · ${formatDate(check.checkedAt)}` : ''}`
+          : 'Reported by the buyer’s browser at upload — re-check below to confirm'}
+        {/* Only worth saying when it is a problem. A distinct back is the
+            expected case and does not need announcing. */}
+        {check.backSideDistinct === false ? ' · both images read as the same side' : ''}
+      </p>
+    </div>
   );
 }
 

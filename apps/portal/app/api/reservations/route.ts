@@ -176,6 +176,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
        * checked and then said nothing.
        */
       nameCheck: data.governmentId.nameCheck ?? null,
+      /*
+       * And the FORMAT verdict — did it read as an ID at all, and as the one
+       * the buyer selected. note.txt: "dapat maveverify kung tama yung format
+       * ng ID na inupload niya."
+       *
+       * Same standing as `nameCheck`: a hint from the browser, never a
+       * control. Documentation can re-run the check from the reservation page,
+       * and that run is the only one a reviewer should lean on.
+       */
+      formatCheck: data.governmentId.formatCheck ?? null,
       status: 'Pending Validation',
       uploadedBy: session.uid,
       uploadedAt: FieldValue.serverTimestamp(),

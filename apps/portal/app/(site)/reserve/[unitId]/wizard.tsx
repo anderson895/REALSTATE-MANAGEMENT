@@ -237,6 +237,24 @@ export function ReservationWizard({
               readName: idCheck.result.nameComparison.normalizedB.slice(0, 400),
             }
           : undefined,
+        /*
+         * Stage 1 travels too — note.txt asks for the FORMAT verdict to reach
+         * the internal system, and it was the half still being thrown away.
+         *
+         * Sent whenever the check produced a result at all, including the runs
+         * that found something wrong. A refusal is exactly what Documentation
+         * wants on the record: it says the buyer was told, replaced the file,
+         * and submitted a different one.
+         */
+        formatCheck: idCheck.result
+          ? {
+              verdict: idCheck.result.verdict,
+              looksLikeId: idCheck.result.looksLikeId,
+              idTypeMatch: idCheck.result.idTypeMatch,
+              detectedId: idCheck.result.detectedId,
+              backSideDistinct: idCheck.result.backSideDistinct,
+            }
+          : undefined,
       },
       acceptedTerms,
       declaredTruthful: declarations.truthful,

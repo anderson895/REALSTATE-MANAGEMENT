@@ -136,6 +136,38 @@ export const reservationSchema = z.object({
         readName: z.string().trim().max(400),
       })
       .optional(),
+    /*
+     * Stage 1 of the same check — is this an ID at all, and is it the one the
+     * buyer said it was?
+     *
+     * note.txt: "ibalik yung OCR sa internal, dapat maveverify kung tama yung
+     * format ng ID na inupload niya."
+     *
+     * `nameCheck` above carried Stage 2 to the reviewer while Stage 1 was
+     * still being thrown away — and Stage 1 is the half the note asks about.
+     * It is also the firmer half: whether a NAME matches is a judgement, but
+     * "you selected Driver's Licence and this reads as a PhilHealth card" is a
+     * fact about the document, and the buyer's browser already refused to
+     * submit on it. Documentation had no way to see that it had.
+     *
+     * Optional and never trusted, for the same reason as `nameCheck`: it
+     * arrives from the browser. It is a hint telling a reviewer where to look.
+     * The Verify ID button in the internal app re-runs the check independently
+     * when they want it done again.
+     */
+    formatCheck: z
+      .object({
+        verdict: z.enum(['match', 'review', 'mismatch']),
+        /** Stage 1: did enough text read as an ID? `null` when too little text. */
+        looksLikeId: z.boolean().nullable(),
+        /** Stage 1b: did it match the SELECTED type? `null` when Stage 1 failed. */
+        idTypeMatch: z.boolean().nullable(),
+        /** What it actually looked like, for the refusal message. */
+        detectedId: z.string().trim().max(60).nullable(),
+        /** False when both images read as the same side of one card. */
+        backSideDistinct: z.boolean().nullable(),
+      })
+      .optional(),
   }),
 
   // ── STEP 7 — Terms and Conditions ──

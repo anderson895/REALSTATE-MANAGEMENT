@@ -46,6 +46,7 @@ export {
   type ReservationPayment,
   type ReservationDocument,
   type DocumentNameCheck,
+  type DocumentFormatCheck,
   type ReservationDetail,
   type UploadedFileRef,
 } from './reservation.queries';

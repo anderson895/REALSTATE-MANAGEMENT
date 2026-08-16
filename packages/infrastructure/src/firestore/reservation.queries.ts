@@ -116,6 +116,31 @@ export interface DocumentNameCheck {
   readonly readName: string;
 }
 
+/**
+ * Whether the upload read as an identity document, and as the RIGHT one.
+ *
+ * note.txt: "ibalik yung OCR sa internal, dapat maveverify kung tama yung
+ * format ng ID na inupload niya."
+ *
+ * The firmer half of the check. Whether a NAME matches is a judgement — OCR
+ * misreads names constantly — but "this reads as a PhilHealth card and the
+ * buyer selected Driver's Licence" is a fact about the file, and the one the
+ * buyer's own browser refuses to submit on.
+ *
+ * `checkedAt` and `checkedBy` are set only when Documentation re-ran it from
+ * the internal app. Absent means this is the buyer's browser reporting on
+ * itself, which is a hint and not a finding.
+ */
+export interface DocumentFormatCheck {
+  readonly verdict: 'match' | 'review' | 'mismatch';
+  readonly looksLikeId: boolean | null;
+  readonly idTypeMatch: boolean | null;
+  readonly detectedId: string | null;
+  readonly backSideDistinct: boolean | null;
+  readonly checkedAt: string | null;
+  readonly checkedBy: string | null;
+}
+
 export interface ReservationDocument {
   readonly docType: string;
   readonly idType: string | null;
@@ -123,6 +148,9 @@ export interface ReservationDocument {
   readonly frontFile: UploadedFileRef | null;
   readonly backFile: UploadedFileRef | null;
   readonly nameCheck: DocumentNameCheck | null;
+  readonly formatCheck: DocumentFormatCheck | null;
+  /** The document id, so a re-check can write its result back. */
+  readonly id: string;
   /** Set when the buyer sent this in answer to a deficiency notice. */
   readonly replacesDeficiency: string | null;
 }
@@ -157,6 +185,33 @@ function toNameCheck(value: unknown): DocumentNameCheck | null {
     similarity: Number(raw.similarity ?? 0),
     registeredName: String(raw.registeredName ?? ''),
     readName: String(raw.readName ?? ''),
+  };
+}
+
+/**
+ * Reads back the format verdict.
+ *
+ * A tri-state on three of the fields, and `undefined` is not one of them:
+ * `null` means the stage never ran, `false` means it ran and failed. A reader
+ * that flattened the two would report "not an ID" for a card the check simply
+ * never reached.
+ */
+function toFormatCheck(value: unknown): DocumentFormatCheck | null {
+  if (value == null || typeof value !== 'object') return null;
+  const raw = value as DocumentData;
+  const verdict = String(raw.verdict ?? '');
+  if (verdict !== 'match' && verdict !== 'review' && verdict !== 'mismatch') return null;
+
+  const tri = (v: unknown): boolean | null => (typeof v === 'boolean' ? v : null);
+
+  return {
+    verdict,
+    looksLikeId: tri(raw.looksLikeId),
+    idTypeMatch: tri(raw.idTypeMatch),
+    detectedId: toText(raw.detectedId),
+    backSideDistinct: tri(raw.backSideDistinct),
+    checkedAt: toIso(raw.checkedAt),
+    checkedBy: toText(raw.checkedBy),
   };
 }
 
@@ -326,12 +381,14 @@ export async function getReservationDetail(
     documents: documentSnap.docs.map((d) => {
       const data = d.data();
       return {
+        id: d.id,
         docType: String(data.docType ?? 'Document'),
         idType: toText(data.idType),
         status: String(data.status ?? ''),
         frontFile: toFileRef(data.frontFile),
         backFile: toFileRef(data.backFile),
         nameCheck: toNameCheck(data.nameCheck),
+        formatCheck: toFormatCheck(data.formatCheck),
         replacesDeficiency: toText(data.replacesDeficiency),
       };
     }),
