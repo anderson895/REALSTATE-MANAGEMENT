@@ -280,24 +280,37 @@ installed, and a production build available — building one only if
 
 ### Opening it as an application
 
-`create-internal-shortcut.bat` puts a desktop shortcut on the machine that
-opens the system in a chromeless browser window — no address bar, no tabs, the
-company logo on the icon and in the taskbar. Run it once per machine:
+Run `create-internal-shortcut.bat` **once per machine**. It writes a desktop
+shortcut called *SFSR Internal System*, and that shortcut is what gets used
+from then on.
 
-```bat
-create-internal-shortcut.bat                        :: the URL set inside it
-create-internal-shortcut.bat https://your-address   :: or one you pass
-```
+Double-clicking it runs `internal-app.ps1` hidden, which:
 
-The icon is `apps/internal/public/sfsr-internal.ico`, generated from the same
-`public/logo.png` the sidebar draws, so the two cannot drift. The window's
-taskbar icon comes from `app/icon.png` instead — in app mode the browser takes
-it from the site's favicon, not from the shortcut, so both are needed.
+1. starts the local server on `127.0.0.1:3001` with no console window,
+2. waits until it answers,
+3. opens it in a chromeless browser window — no address bar, no tabs,
+4. and stops the server again when that window is closed.
 
-> **The shortcut is not a security control.** It only opens a URL, and the same
-> URL in any browser reaches the same page. What restricts access is the
-> employee login and the RBAC matrix behind it. If the system is ever hosted
-> rather than run locally, that is the layer to strengthen — not this file.
+Nothing is deployed and nothing is exposed. If the server was already running —
+started from a terminal, or by `run-internal.bat` — the launcher attaches to it
+and leaves it running afterwards, because it belongs to something else.
+
+The first launch on a fresh copy of the project needs `npm install` and a build,
+which takes minutes. That path is deliberately **not** silent: it hands over to
+`run-internal.bat` in a visible window, because a hidden process doing several
+minutes of work is indistinguishable from one that has failed.
+
+**Two icons, because they are read from different places.** The shortcut carries
+`apps/internal/public/sfsr-internal.ico`; the window's taskbar icon comes from
+the site's favicon, `apps/internal/app/icon.png`. Both are generated from the
+same `public/logo.png` the sidebar draws, so the application and its launcher
+cannot end up showing different marks.
+
+> **The shortcut is convenience, not access control.** It opens a URL; the same
+> URL typed into any browser on that machine reaches the same page. What
+> restricts access is the employee login and the RBAC matrix behind it. The
+> reason nobody *else* can reach it is the bind address — `127.0.0.1`, not
+> `0.0.0.0` — and that is decided by `start:internal:local`, not by this file.
 
 ---
 
