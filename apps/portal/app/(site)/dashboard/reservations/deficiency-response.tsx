@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { ID_TYPES } from '@sfsr/domain';
 import { FileUpload, type UploadedFile } from '../../reserve/[unitId]/file-upload';
 
 /**
@@ -43,6 +44,18 @@ export function DeficiencyResponse({
 }) {
   const router = useRouter();
   const [docType, setDocType] = useState<string>(DOCUMENT_TYPES[0]);
+  /*
+   * Which card this is — asked here for the same reason the reservation form
+   * asks it.
+   *
+   * The original submission records `idType`, and the ID check compares the
+   * card it READS against the card the buyer SAID it was. A correction filed
+   * without it produced a document Documentation could not run that check on
+   * at all: the Verify ID button on the reservation page has nothing to
+   * compare to and refuses. Which is worst here of all the places it could
+   * happen, because a correction is usually a REPLY to a rejected ID.
+   */
+  const [idType, setIdType] = useState<string>('');
   const [frontFile, setFrontFile] = useState<UploadedFile | null>(null);
   const [backFile, setBackFile] = useState<UploadedFile | null>(null);
   const [note, setNote] = useState('');
@@ -64,6 +77,10 @@ export function DeficiencyResponse({
       toast.error('Attach the corrected file first.');
       return;
     }
+    if (twoSided && idType === '') {
+      toast.error('Choose which ID you are sending.');
+      return;
+    }
     setBusy(true);
     try {
       const response = await fetch('/api/reservations/respond', {
@@ -72,6 +89,9 @@ export function DeficiencyResponse({
         body: JSON.stringify({
           reservationNumber,
           docType,
+          // Only meaningful for an ID, and dropped otherwise so a receipt does
+          // not arrive claiming to be a passport.
+          idType: twoSided ? idType : null,
           frontFile,
           // Only sent when the type has a reverse, so a stale back from a
           // previous selection cannot ride along with a receipt.
@@ -85,6 +105,7 @@ export function DeficiencyResponse({
       toast.success('Sent. Our team will review it shortly.');
       setFrontFile(null);
       setBackFile(null);
+      setIdType('');
       setNote('');
       router.refresh();
     } catch (error) {
@@ -127,9 +148,13 @@ export function DeficiencyResponse({
             value={docType}
             onChange={(event) => {
               setDocType(event.target.value);
-              // Switching away from an ID drops the reverse, so it cannot be
-              // submitted against a document that has no back.
-              if (event.target.value !== 'Government ID') setBackFile(null);
+              // Switching away from an ID drops the reverse and the card type,
+              // so neither can be submitted against a document that has no
+              // back and is not an ID.
+              if (event.target.value !== 'Government ID') {
+                setBackFile(null);
+                setIdType('');
+              }
             }}
             className="mt-1 w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm"
           >
@@ -140,6 +165,31 @@ export function DeficiencyResponse({
             ))}
           </select>
         </div>
+
+        {twoSided ? (
+          <div>
+            <label htmlFor="idType" className="block text-xs text-amber-900">
+              Which ID is it?
+            </label>
+            <select
+              id="idType"
+              value={idType}
+              onChange={(event) => setIdType(event.target.value)}
+              className="mt-1 w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm"
+            >
+              <option value="">Select…</option>
+              {ID_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-amber-800">
+              Our team checks the card you send against the one you name here, so this has to
+              match.
+            </p>
+          </div>
+        ) : null}
 
         <FileUpload
           kind="client-document"
@@ -178,7 +228,7 @@ export function DeficiencyResponse({
         <button
           type="button"
           onClick={submit}
-          disabled={busy || !frontFile}
+          disabled={busy || !frontFile || (twoSided && idType === '')}
           className="w-full rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? 'Sending…' : 'Send correction'}

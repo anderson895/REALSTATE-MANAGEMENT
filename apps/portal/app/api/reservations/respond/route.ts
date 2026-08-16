@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
+import { ID_TYPES } from '@sfsr/domain';
 import { getAdminFirestore } from '@sfsr/infrastructure/server';
 import { getClientSession } from '@/lib/session';
 
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   let body: {
     reservationNumber?: unknown;
     docType?: unknown;
+    idType?: unknown;
     frontFile?: FilePayload;
     backFile?: FilePayload;
     note?: unknown;
@@ -70,6 +72,36 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
   if (!(DOCUMENT_TYPES as readonly string[]).includes(docType)) {
     return NextResponse.json({ error: 'Choose what you are replacing.' }, { status: 400 });
+  }
+
+  /*
+   * Which card, when the correction IS a card.
+   *
+   * Required for a Government ID and refused for anything else. Documents
+   * filed through this route used to carry no `idType` at all, which left
+   * Documentation holding a replacement ID they could not run the format check
+   * against — the check compares what the OCR reads to what the buyer said it
+   * was, and there was no second half to that comparison.
+   *
+   * That was worst here of all the places it could happen: a correction is
+   * usually the answer to an ID that was already rejected, so it is the upload
+   * most in need of checking.
+   *
+   * Re-validated on the server even though the form asks for it, and matched
+   * against ID_TYPES rather than accepted as free text, so it stays comparable
+   * to the value the original submission stored.
+   */
+  const isIdCard = docType === 'Government ID';
+  const idType = String(body.idType ?? '').trim();
+
+  if (isIdCard && !(ID_TYPES as readonly string[]).includes(idType)) {
+    return NextResponse.json({ error: 'Choose which ID you are sending.' }, { status: 400 });
+  }
+  if (!isIdCard && idType !== '') {
+    return NextResponse.json(
+      { error: 'An ID type only applies to a government ID.' },
+      { status: 400 },
+    );
   }
 
   /*
@@ -125,6 +157,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     reservationNumber: number,
     buyerUid: session.uid,
     docType,
+    // Null for anything that is not a card, so the field means the same thing
+    // here as it does on an original submission and the format check can read
+    // it without knowing which route wrote the document.
+    idType: isIdCard ? idType : null,
     // Marks this as a correction rather than an original submission, so a
     // reviewer opening the record knows which one to look at.
     replacesDeficiency: String(data.deficiencyReason ?? ''),
