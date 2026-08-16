@@ -50,9 +50,23 @@ export interface BuyerRow {
 export function BuyerSearch({ rows, projectId }: { rows: readonly BuyerRow[]; projectId: string }) {
   const [term, setTerm] = useState('');
 
+  const searching = term.trim() !== '';
+
+  /*
+   * Nothing is listed until something is typed.
+   *
+   * note.txt: "pagka pili ng project meron LANG search field... meron din
+   * count ng unit sold." The screen opens as a search box and a number, not as
+   * a roster — this is a file room, and a file room does not lay every folder
+   * on the table when you walk in.
+   *
+   * The rows are all here regardless, because the filtering is in memory (see
+   * above). Withholding them is a decision about the screen, not about what it
+   * costs to fetch them.
+   */
   const matches = useMemo(() => {
     const q = term.trim().toLowerCase();
-    if (q === '') return rows;
+    if (q === '') return [];
     return rows.filter((r) =>
       [r.unitNo, r.buyerName, r.number, r.username].some((field) =>
         field.toLowerCase().includes(q),
@@ -80,24 +94,38 @@ export function BuyerSearch({ rows, projectId }: { rows: readonly BuyerRow[]; pr
 
       <section className="overflow-hidden rounded-xl border border-neutral-200/80 bg-white shadow-sm">
         <header className="flex items-center justify-between gap-4 border-b border-neutral-200/80 px-5 py-3.5">
-          <h2 className="text-[11px] font-bold uppercase tracking-[0.1em] text-navy-800">Buyers</h2>
+          <h2 className="text-[11px] font-bold uppercase tracking-[0.1em] text-navy-800">
+            Units sold
+          </h2>
           <span className="text-[11px] font-medium text-neutral-500">
-            {term.trim() === ''
-              ? `${rows.length} ${rows.length === 1 ? 'unit' : 'units'} sold`
-              : `${matches.length} of ${rows.length} matching`}
+            {searching
+              ? `${matches.length} ${matches.length === 1 ? 'match' : 'matches'} of ${rows.length}`
+              : `${rows.length} ${rows.length === 1 ? 'unit' : 'units'}`}
           </span>
         </header>
 
         {matches.length === 0 ? (
           <div className="px-6 py-12 text-center">
-            <p className="text-sm font-medium text-navy-800">
-              {rows.length === 0 ? 'No buyers yet' : 'Nothing matches that search'}
-            </p>
-            <p className="mx-auto mt-1.5 max-w-md text-sm text-neutral-500">
-              {rows.length === 0
-                ? 'A buyer appears here once Billing has cleared their payment, Documentation has accepted the requirements, and a Documentation Supervisor has approved.'
-                : 'Try the unit number as it appears on the plan, or part of the buyer’s name.'}
-            </p>
+            {!searching ? (
+              <>
+                <p className="tabular text-3xl font-bold text-navy-800">{rows.length}</p>
+                <p className="mt-1 text-sm font-medium text-navy-800">
+                  {rows.length === 1 ? 'unit sold' : 'units sold'}
+                </p>
+                <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500">
+                  {rows.length === 0
+                    ? 'A buyer appears here once Billing has cleared their payment, Documentation has accepted the requirements, and a Documentation Supervisor has approved.'
+                    : 'Search above by unit number or buyer name to open a master file.'}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-navy-800">Nothing matches that search</p>
+                <p className="mx-auto mt-1.5 max-w-md text-sm text-neutral-500">
+                  Try the unit number as it appears on the plan, or part of the buyer’s name.
+                </p>
+              </>
+            )}
           </div>
         ) : (
           <ul className="divide-y divide-neutral-100">
