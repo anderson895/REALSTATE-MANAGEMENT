@@ -7,7 +7,7 @@ import {
   DomainError,
   ParkingSlotId,
   UnitId,
-  can,
+  canRaiseWalkIn,
   normalizeMobile,
 } from '@sfsr/domain';
 import {
@@ -28,15 +28,20 @@ import { walkInSchema } from '@/lib/walk-in-schema';
  * note.txt: "Add walking reservation on internal same process sa web portal",
  * and later, decisively: "documentation ang in charge for walk in application".
  *
- * Every action here re-checks `create` on RESERVATION_VERIFICATION rather than
- * trusting that the page rendered. Documentation holds it as part of FULL;
- * Billing has the module WITHOUT create, Sales has view and print, and IT has
- * neither. Three of the four are kept out by that one grant.
+ * Every action here re-checks the grant rather than trusting that the page
+ * rendered. Documentation holds `create` as part of FULL; Billing has the
+ * module WITHOUT create, Sales has view and print, and IT has neither. Three of
+ * the four are kept out by that one grant.
+ *
+ * The fourth is the Documentation SUPERVISOR, and no grant can exclude them —
+ * they share the role. `canRaiseWalkIn` is what carries note.txt's "kay
+ * Documentation Staff lang talaga ang Walking process", and it lives in the
+ * domain so this helper and the page ask one question rather than two.
  */
 async function requireEncoder() {
   const session = await requireModule('RESERVATION_VERIFICATION');
-  if (!can(toActor(session), 'RESERVATION_VERIFICATION', 'create')) {
-    throw new Error('Your role cannot raise a walk-in reservation.');
+  if (!canRaiseWalkIn(toActor(session))) {
+    throw new Error('Only Documentation Staff can raise a walk-in reservation.');
   }
   return session;
 }

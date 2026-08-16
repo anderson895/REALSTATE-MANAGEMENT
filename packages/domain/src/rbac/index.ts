@@ -16,6 +16,7 @@ export {
 export {
   can,
   canAccessModule,
+  canRaiseWalkIn,
   modulesFor,
   clientCan,
   CLIENT_CAPABILITIES,

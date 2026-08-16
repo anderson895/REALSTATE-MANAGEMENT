@@ -119,7 +119,7 @@ export default async function DashboardPage({
         <div className="grid gap-5 lg:grid-cols-12">
           <div className="lg:col-span-8">
             <ModuleLauncher
-              sections={navigationFor(session.role)}
+              sections={navigationFor(toActor(session))}
               roleLabel={ROLE_LABELS[session.role]}
             />
           </div>

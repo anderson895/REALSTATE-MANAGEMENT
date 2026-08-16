@@ -301,6 +301,36 @@ export function modulesFor(role: InternalRole): Module[] {
   return MODULES.filter((m) => grantsFor(role, m).length > 0);
 }
 
+/**
+ * May this person raise a walk-in reservation at the counter?
+ *
+ * note.txt: "Kay Document Supervisor hindi dapat siya nakakapag Walkin, kay
+ * Documentation Staff lang talaga ang Walking process."
+ *
+ * ── Why this cannot be expressed as can(..., 'create') ───────────────────
+ *
+ * Staff and Supervisor are the SAME role. `isSupervisor` is a rank read from
+ * the workbook's Staff/Supervisor column, not a separate row in the matrix, so
+ * `RESERVATION_VERIFICATION: FULL` grants `create` to both — and no edit to the
+ * matrix can separate them without inventing a role RBAC.xls does not have.
+ *
+ * ── Why the supervisor is excluded at all ────────────────────────────────
+ *
+ * The same reason the client split approval three ways to begin with. A
+ * Documentation Supervisor gives the FINAL approval on a reservation
+ * ("maapprove niya lang final kung approve na ng billing and documentation").
+ * Letting them raise one at the counter as well would put the first and the
+ * last signature on one desk: a walk-in they created and then approved would
+ * pass no second pair of eyes.
+ *
+ * A predicate rather than an inline check at the page, because the page is not
+ * the control — the server action has to ask the same question, and two copies
+ * of it are two chances to answer differently.
+ */
+export function canRaiseWalkIn(actor: InternalActor): boolean {
+  return !actor.isSupervisor && can(actor, 'RESERVATION_VERIFICATION', 'create');
+}
+
 export function clientCan(tier: ClientTier, capability: ClientCapability): boolean {
   return CLIENT_MATRIX[tier].includes(capability);
 }

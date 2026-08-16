@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   can,
   canAccessModule,
+  canRaiseWalkIn,
   clientCan,
   modulesFor,
   type InternalActor,
@@ -305,5 +306,38 @@ describe('walk-in reservations', () => {
     // Billing clears payments; raising the reservation it will then clear
     // would put both halves in one desk.
     expect(can(staff('BILLING'), 'RESERVATION_VERIFICATION', 'create')).toBe(false);
+  });
+});
+
+/**
+ * note.txt: "Kay Document Supervisor hindi dapat siya nakakapag Walkin, kay
+ * Documentation Staff lang talaga ang Walking process."
+ *
+ * The rank, not the role, is what decides — which is why this needs its own
+ * predicate and its own tests. `can(..., 'create')` cannot see the difference.
+ */
+describe('canRaiseWalkIn — the counter is Documentation Staff only', () => {
+  it('lets Documentation STAFF raise one', () => {
+    expect(canRaiseWalkIn(staff('DOCUMENTATION'))).toBe(true);
+  });
+
+  it('refuses the Documentation SUPERVISOR', () => {
+    // They give the final approval. Raising the reservation they will later
+    // sign off puts the first and last signature on one desk.
+    expect(canRaiseWalkIn(supervisor('DOCUMENTATION'))).toBe(false);
+  });
+
+  it('is stricter than the raw create grant it builds on', () => {
+    // The point of the predicate: the matrix says yes to both, because Staff
+    // and Supervisor are one role. Only the rank separates them.
+    expect(can(supervisor('DOCUMENTATION'), 'RESERVATION_VERIFICATION', 'create')).toBe(true);
+    expect(canRaiseWalkIn(supervisor('DOCUMENTATION'))).toBe(false);
+  });
+
+  it('still refuses every role that never had the grant', () => {
+    for (const role of ['SALES', 'BILLING', 'IT_ADMINISTRATOR', 'LEGAL_COUNSEL'] as const) {
+      expect(canRaiseWalkIn(staff(role))).toBe(false);
+      expect(canRaiseWalkIn(supervisor(role))).toBe(false);
+    }
   });
 });

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { can } from '@sfsr/domain';
+import { canRaiseWalkIn } from '@sfsr/domain';
 import { getAdminFirestore, listProjects, listUnits } from '@sfsr/infrastructure/server';
 import { PageHeader } from '@sfsr/ui';
 import { requireModule, toActor } from '@/lib/session';
@@ -28,15 +28,15 @@ export default async function WalkInPage() {
   const session = await requireModule('RESERVATION_VERIFICATION');
 
   /*
-   * `create`, not merely access to the module.
+   * Documentation STAFF, not merely access to the module.
    *
    * `requireModule` above lets in anyone with any grant, which includes Billing
-   * (view/modify/print) and Sales (view/print). Neither may raise a reservation
-   * — the client moved walk-ins to Documentation — and the server actions
-   * refuse them regardless. This is so they get a 404 rather than a form that
-   * rejects them at the last step.
+   * (view/modify/print) and Sales (view/print) — and, since rank is not part of
+   * the matrix, the Documentation Supervisor, whom note.txt now keeps off this
+   * counter. The server actions refuse all of them regardless; this is so they
+   * get a 404 rather than a form that rejects them at the last step.
    */
-  if (!can(toActor(session), 'RESERVATION_VERIFICATION', 'create')) notFound();
+  if (!canRaiseWalkIn(toActor(session))) notFound();
 
   const db = getAdminFirestore();
   const projects = await listProjects(db);

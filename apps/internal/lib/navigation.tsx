@@ -20,7 +20,7 @@ import {
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
-import { modulesFor, type InternalRole, type Module } from '@sfsr/domain';
+import { modulesFor, type InternalActor, type InternalRole, type Module } from '@sfsr/domain';
 import type { NavSection } from '@sfsr/ui';
 
 /**
@@ -71,6 +71,16 @@ interface ModuleRoute {
    * disagree about it — see the note on the dashboard entry below.
    */
   readonly always?: boolean;
+  /**
+   * Hidden from supervisors, however the matrix reads.
+   *
+   * Rank is not part of the RBAC matrix — Staff and Supervisor share a role —
+   * so `roles` and the module grant cannot express "Documentation Staff but not
+   * their Supervisor". note.txt asks for exactly that on the walk-in counter,
+   * and without this flag the supervisor would keep a sidebar link to a page
+   * that 404s them.
+   */
+  readonly staffOnly?: boolean;
 }
 
 const ROUTES: readonly ModuleRoute[] = [
@@ -127,11 +137,15 @@ const ROUTES: readonly ModuleRoute[] = [
    * note.txt: "Add walking reservation on internal same process sa web portal",
    * then "documentation ang in charge for walk in application".
    *
-   * `roles` narrows it to Documentation, but the real gate is the `create`
-   * permission the page and every action re-check: Billing holds this module
-   * with view/modify/print and Sales with view/print, so neither can raise one
-   * even if they reached the URL. The role list keeps the link out of their
-   * sidebar; the grant is what refuses them.
+   * `roles` narrows it to Documentation, but the real gate is `canRaiseWalkIn`,
+   * which the page and every action re-check: Billing holds this module with
+   * view/modify/print and Sales with view/print, so neither can raise one even
+   * if they reached the URL. The role list keeps the link out of their sidebar;
+   * the predicate is what refuses them.
+   *
+   * `staffOnly` carries the later instruction — "kay Document Supervisor hindi
+   * dapat siya nakakapag Walkin". It cannot be said with `roles`, because the
+   * supervisor IS Documentation.
    */
   {
     module: 'RESERVATION_VERIFICATION',
@@ -140,6 +154,7 @@ const ROUTES: readonly ModuleRoute[] = [
     group: 'Processing',
     icon: UserPlus,
     roles: ['DOCUMENTATION'],
+    staffOnly: true,
   },
   {
     module: 'APPROVAL_MONITORING',
@@ -271,14 +286,15 @@ export function departmentFor(role: InternalRole): string {
   return DEPARTMENT_LABELS[role];
 }
 
-export function navigationFor(role: InternalRole): NavSection[] {
-  const granted = new Set<Module>(modulesFor(role));
+export function navigationFor(actor: InternalActor): NavSection[] {
+  const granted = new Set<Module>(modulesFor(actor.role));
   const isDev = process.env.NODE_ENV === 'development';
   const visible = ROUTES.filter(
     (r) =>
       (r.always || granted.has(r.module)) &&
-      (!r.roles || r.roles.includes(role)) &&
-      (!r.devOnly || isDev),
+      (!r.roles || r.roles.includes(actor.role)) &&
+      (!r.devOnly || isDev) &&
+      (!r.staffOnly || !actor.isSupervisor),
   );
 
   return GROUP_ORDER.map((group) => {

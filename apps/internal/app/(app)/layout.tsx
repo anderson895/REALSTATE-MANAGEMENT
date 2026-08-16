@@ -2,7 +2,7 @@ import { headers } from 'next/headers';
 import Image from 'next/image';
 import { AppShell } from '@sfsr/ui';
 import { ROLE_LABELS, isInternalRole } from '@sfsr/domain';
-import { requireEmployee } from '@/lib/session';
+import { requireEmployee, toActor } from '@/lib/session';
 import { departmentFor, navigationFor } from '@/lib/navigation';
 import { countWaitingFor, queueHrefFor } from '@/lib/notifications';
 import { NotificationBell } from './notification-bell';
@@ -66,7 +66,9 @@ export default async function InternalLayout({ children }: { children: React.Rea
           className="h-8 w-auto shrink-0 object-contain"
         />
       }
-      sections={navigationFor(session.role)}
+      // The actor, not just the role: the walk-in link is hidden from the
+      // Documentation Supervisor, and rank is not part of the RBAC matrix.
+      sections={navigationFor(toActor(session))}
       currentPath={currentPath}
       // Only the group holding the current page starts open. Kept after IT was
       // stripped back to four links, because it is the busier desks the setting
