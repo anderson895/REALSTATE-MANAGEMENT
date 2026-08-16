@@ -45,6 +45,10 @@ npm-debug.log*
 yarn-error.log*
 .vercel
 *.tsbuildinfo
+# tesseract.js writes its ~5 MB language model beside the process that ran it.
+# The browser caches its own copy, so this only ever appears when the OCR is
+# driven from a node script.
+*.traineddata
 # ── Kept out of the repo by the project owner ─────────────────────────────
 instruction.txt
 # Defense preparation, not part of the system. Listed rather than merely left
