@@ -80,7 +80,8 @@ export {
   sumCollectedCentavos,
   getClientMasterfile,
   searchClients,
-  listClientMasterfiles,
+  listMasterfileProjects,
+  listProjectMasterfiles,
   countClients,
   countDocumentQueue,
   countReservationsByStatusAndProject,
@@ -88,7 +89,8 @@ export {
   type DocumentQueueRow,
   type PaymentQueueRow,
   type ClientMasterfileRow,
-  type MasterfileEntry,
+  type MasterfileProject,
+  type ProjectMasterfileRow,
   type StatusByProject,
 } from './firestore';
 

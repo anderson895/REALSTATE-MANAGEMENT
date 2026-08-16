@@ -396,44 +396,118 @@ export async function countReservationsByStatusAndProject(
 }
 
 
-export interface MasterfileEntry {
-  readonly client: ClientMasterfileRow;
-  readonly reservations: readonly {
-    readonly number: string;
-    readonly unitId: string;
-    readonly projectName: string;
-    readonly status: string;
-    readonly source: 'Portal' | 'Internal';
-    readonly approvedAt: string | null;
-  }[];
+export interface MasterfileProject {
+  readonly id: string;
+  readonly name: string;
+  readonly location: string;
+  readonly heroImageUrl: string | null;
+  /** Approved reservations here — note.txt's "count ng unit sold". */
+  readonly unitsSold: number;
+  /** Distinct buyers, which is smaller when one person bought two units. */
+  readonly buyers: number;
 }
 
 /**
- * The Client Master Files screen — note.txt: "Clients profiles change to
- * Client Master Files — Approved Reservation from (Internal and Portal)".
+ * Page one of Client Master Files — note.txt: "Naka per project siya... puro
+ * project lang muna ito."
  *
- * Built from the RESERVATIONS side, not the clients side. A master file exists
- * because a buyer bought something; listing every registered account and then
- * asking what each one owns would read the whole client collection to show the
- * handful with an approved reservation, and would put browsers who never
- * reserved anything in a file of buyers.
+ * Every project is listed, including those that have sold nothing. A project
+ * with no buyers is a fact worth seeing here; hiding it would leave the reader
+ * unable to tell "sold nothing" from "not in the system".
  *
- * `source` is carried through untouched so both channels appear in one list
- * rather than being split into two screens — which is what "(Internal and
- * Portal)" is asking for.
- *
- * COST: one query for the approved reservations, one `getAll` for their
- * distinct buyers, and one for the project names. Bounded by `limit`.
+ * COST: 5 project reads plus one query over the approved reservations — the
+ * same set page two then narrows. Five separate `count()` aggregates would
+ * cost five queries to answer what this one already knows.
  */
-export async function listClientMasterfiles(
+export async function listMasterfileProjects(
   db: Firestore,
   approvedStatuses: readonly ReservationStatus[],
-  limit = 50,
-): Promise<MasterfileEntry[]> {
+): Promise<MasterfileProject[]> {
+  const [projects, reservations] = await Promise.all([
+    db.collection('projects').limit(50).get(),
+    approvedStatuses.length === 0
+      ? null
+      : db
+          .collection('reservations')
+          .where('status', 'in', [...approvedStatuses])
+          .select('projectId', 'clientId')
+          .get(),
+  ]);
+
+  const sold = new Map<string, { units: number; buyers: Set<string> }>();
+  for (const doc of reservations?.docs ?? []) {
+    const projectId = toText(doc.data().projectId);
+    if (!projectId) continue;
+    const bucket = sold.get(projectId) ?? { units: 0, buyers: new Set<string>() };
+    bucket.units += 1;
+    const clientId = toText(doc.data().clientId);
+    if (clientId) bucket.buyers.add(clientId);
+    sold.set(projectId, bucket);
+  }
+
+  return projects.docs
+    .map((doc): MasterfileProject => {
+      const raw = doc.data();
+      const bucket = sold.get(doc.id);
+      return {
+        id: doc.id,
+        name: String(raw.name ?? doc.id),
+        location: String(raw.location ?? ''),
+        heroImageUrl: raw.heroImageUrl ? String(raw.heroImageUrl) : null,
+        unitsSold: bucket?.units ?? 0,
+        buyers: bucket?.buyers.size ?? 0,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export interface ProjectMasterfileRow {
+  readonly number: string;
+  readonly clientId: string;
+  readonly buyerName: string;
+  readonly username: string;
+  readonly unitId: string;
+  /**
+   * The unit number a buyer would recognise — `A-102`, not `EU002`.
+   *
+   * These are not the same string anywhere in the catalogue: all 150 units have
+   * a document id (`EU002`) distinct from their `unitNo` (`A-102`). note.txt
+   * asks to search by "unity number", and a box that only matched the document
+   * id would find nothing for anyone typing the number printed on the plan.
+   */
+  readonly unitNo: string;
+  readonly unitType: string;
+  readonly status: string;
+  readonly source: 'Portal' | 'Internal';
+  readonly approvedAt: string | null;
+}
+
+/**
+ * Page two — the buyers who bought into ONE project.
+ *
+ * note.txt: "pagka pili ng project meron lang search field (unity number or
+ * buyers name), meron din count ng unit sold."
+ *
+ * The search is not done here. This returns the project's approved
+ * reservations whole and the page filters them in memory, because the set is
+ * bounded by the project's own inventory — at most 30 units — and a query per
+ * keystroke would cost a read set each time to narrow a list that already fits
+ * in one.
+ *
+ * COST: one query for the reservations, one `getAll` for their units, one for
+ * their distinct buyers.
+ */
+export async function listProjectMasterfiles(
+  db: Firestore,
+  projectId: string,
+  approvedStatuses: readonly ReservationStatus[],
+  limit = 100,
+): Promise<ProjectMasterfileRow[]> {
   if (approvedStatuses.length === 0) return [];
 
   const snap = await db
     .collection('reservations')
+    .where('projectId', '==', projectId)
     .where('status', 'in', [...approvedStatuses])
     .limit(limit)
     .get();
@@ -441,53 +515,36 @@ export async function listClientMasterfiles(
   if (snap.empty) return [];
 
   const rows = snap.docs.map((doc) => ({ number: doc.id, raw: doc.data() }));
-  const clientIds = [...new Set(rows.map((r) => String(r.raw.clientId ?? '')).filter(Boolean))];
+  const clientIds = rows.map((r) => toText(r.raw.clientId)).filter((id): id is string => id !== null);
+  const unitIds = rows.map((r) => toText(r.raw.unitId)).filter((id): id is string => id !== null);
 
-  const [clients, projects] = await Promise.all([
-    fetchAll(db, clientIds.map((id) => db.collection('clients').doc(id))),
-    db.collection('projects').limit(50).get(),
+  const [clients, units] = await Promise.all([
+    fetchAll(db, [...new Set(clientIds)].map((id) => db.collection('clients').doc(id))),
+    fetchAll(db, [...new Set(unitIds)].map((id) => db.collection('units').doc(id))),
   ]);
 
-  const projectNames = new Map<string, string>(
-    projects.docs.map((doc) => [doc.id, String(doc.data().name ?? doc.id)]),
-  );
-
-  // One entry per BUYER, with everything they hold underneath — a master file
-  // is about a person, and the same buyer can own more than one unit.
-  const byClient = new Map<string, MasterfileEntry>();
-
-  for (const { number, raw } of rows) {
-    const clientId = String(raw.clientId ?? '');
-    if (!clientId) continue;
-
-    let entry = byClient.get(clientId);
-    if (!entry) {
-      const data = clients.get(clientId);
-      entry = {
-        client: data
-          ? toMasterfile(clientId, data)
-          : // The account is gone but the reservation is not. Showing the id
-            // keeps the file visible instead of dropping a real sale.
-            { id: clientId, name: clientId, username: '', email: '', mobile: null, tier: 'INITIAL' },
-        reservations: [],
+  return rows
+    .map(({ number, raw }): ProjectMasterfileRow => {
+      const clientId = toText(raw.clientId) ?? '';
+      const unitId = toText(raw.unitId) ?? '';
+      const unit = units.get(unitId);
+      return {
+        number,
+        clientId,
+        // Falls back to the id rather than dropping the row: the account may be
+        // gone, but the sale happened and belongs in the file.
+        buyerName: fullNameOf(clients.get(clientId)) ?? clientId,
+        username: String(clients.get(clientId)?.username ?? ''),
+        unitId,
+        unitNo: String(unit?.unitNo ?? unitId),
+        unitType: String(unit?.unitType ?? ''),
+        status: String(raw.status ?? ''),
+        source: raw.source === 'Internal' ? 'Internal' : 'Portal',
+        approvedAt: toIso(raw.approvedAt),
       };
-      byClient.set(clientId, entry);
-    }
-
-    const projectId = toText(raw.projectId);
-    (entry.reservations as MasterfileEntry['reservations'][number][]).push({
-      number,
-      unitId: String(raw.unitId ?? ''),
-      projectName: projectId ? (projectNames.get(projectId) ?? projectId) : '—',
-      status: String(raw.status ?? ''),
-      source: raw.source === 'Internal' ? 'Internal' : 'Portal',
-      approvedAt: toIso(raw.approvedAt),
-    });
-  }
-
-  return [...byClient.values()].sort((a, b) => a.client.name.localeCompare(b.client.name));
+    })
+    .sort((a, b) => a.unitNo.localeCompare(b.unitNo));
 }
-
 
 export interface PaymentQueueRow {
   readonly number: string;

@@ -1,38 +1,36 @@
-import { Globe, Store } from 'lucide-react';
+import Link from 'next/link';
+import { Building2, ChevronRight } from 'lucide-react';
 import { SALES_VISIBLE_STATUSES } from '@sfsr/domain';
-import { getAdminFirestore, listClientMasterfiles } from '@sfsr/infrastructure/server';
-import { cn } from '@sfsr/ui';
+import { getAdminFirestore, listMasterfileProjects } from '@sfsr/infrastructure/server';
 import { requireModule } from '@/lib/session';
-import { STATUS_LABELS, formatDate } from '@/lib/reservations';
 
 /**
- * Client Master Files.
+ * Client Master Files, page one — the projects.
  *
- * note.txt: "Clients profiles change to Client Master Files — Approved
- * Reservation from (Internal and Portal)."
+ * note.txt: "Client Master files: Naka per project siya, for example legaspi
+ * place nandun yung search button… Pages 1 /clients — puro project lang muna
+ * ito."
  *
- * ── What a master file is, and is not ─────────────────────────────────────
+ * ── Why this replaced a single flat list ──────────────────────────────────
  *
- * Not a list of registered accounts. A browser who signed up, looked at three
- * units and left is not a client of this company, and putting them in the same
- * file as a buyer who has completed a purchase makes the file useless for the
- * thing it is for. So this is built from the APPROVED reservations and grouped
- * by buyer — a master file exists because somebody bought something.
+ * The screen used to be every approved buyer in the company, one after
+ * another. That reads fine at two buyers and stops working at two hundred:
+ * staff work a project at a time, and the question they arrive with is "who
+ * bought in Emerald Park", not "who has bought anything".
  *
- * Both channels appear in one list, which is what "(Internal and Portal)" is
- * asking for. Every record today reads Portal because the walk-in flow is not
- * built yet; the column is there so it does not have to be retrofitted when it
- * is, and so nobody has to guess afterwards which sale came in over the counter.
- *
- * Approved statuses come from `SALES_VISIBLE_STATUSES` — the same list the
- * Sales screen and the Security Rules use, rather than a second copy that
+ * A master file still means what it meant — a buyer with an APPROVED
+ * reservation. The statuses come from `SALES_VISIBLE_STATUSES`, the same list
+ * the Sales screen and the Security Rules use, rather than a second copy that
  * could drift.
+ *
+ * Projects that have sold nothing are shown, reading "no buyers yet". Hiding
+ * them would leave the reader unable to tell that from "not in the system".
  */
-export default async function ClientMasterFilesPage() {
+export default async function ClientMasterFileProjectsPage() {
   await requireModule('CLIENT_PROFILE');
 
-  const entries = await listClientMasterfiles(getAdminFirestore(), SALES_VISIBLE_STATUSES, 50);
-  const total = entries.reduce((n, e) => n + e.reservations.length, 0);
+  const projects = await listMasterfileProjects(getAdminFirestore(), SALES_VISIBLE_STATUSES);
+  const totalSold = projects.reduce((n, p) => n + p.unitsSold, 0);
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
@@ -40,93 +38,67 @@ export default async function ClientMasterFilesPage() {
         <h1 className="text-2xl font-bold tracking-tight text-navy-800">Client Master Files</h1>
         <div aria-hidden="true" className="mt-2.5 h-0.5 w-16 rounded-full bg-gold-500" />
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-neutral-500">
-          Buyers with an approved reservation, from the Portal and from walk-in. A registered
-          account with nothing approved is not a master file and does not appear here.
+          Choose a project to search its buyers. A master file exists for a buyer with an approved
+          reservation, from the Portal or from the walk-in counter — a registered account with
+          nothing approved does not appear.
         </p>
       </header>
 
       <section className="overflow-hidden rounded-xl border border-neutral-200/80 bg-white shadow-sm">
         <header className="flex items-center justify-between gap-4 border-b border-neutral-200/80 px-5 py-3.5">
           <h2 className="text-[11px] font-bold uppercase tracking-[0.1em] text-navy-800">
-            Approved Buyers
+            Projects
           </h2>
           <span className="text-[11px] font-medium text-neutral-500">
-            {entries.length === 0
-              ? 'none yet'
-              : `${entries.length} ${entries.length === 1 ? 'buyer' : 'buyers'} · ${total} approved`}
+            {totalSold} {totalSold === 1 ? 'unit' : 'units'} sold in total
           </span>
         </header>
 
-        {entries.length === 0 ? (
-          <div className="px-6 py-14 text-center">
-            <p className="text-sm font-medium text-navy-800">No master files yet</p>
-            <p className="mx-auto mt-1.5 max-w-md text-sm text-neutral-500">
-              A buyer appears here once Billing has cleared their payment, Documentation has
-              accepted the requirements, and a Documentation Supervisor has approved.
-            </p>
-          </div>
-        ) : (
-          <ul className="divide-y divide-neutral-100">
-            {entries.map((entry) => (
-              <li key={entry.client.id} className="px-5 py-4">
-                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                  <p className="text-sm font-semibold text-neutral-800">{entry.client.name}</p>
-                  <span
-                    className={cn(
-                      'rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                      entry.client.tier === 'PERMANENT'
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'bg-navy-50 text-navy-700',
-                    )}
-                  >
-                    {entry.client.tier}
-                  </span>
-                </div>
-                <p className="mt-0.5 text-xs text-neutral-500">
-                  {[entry.client.username, entry.client.email, entry.client.mobile]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </p>
+        <ul className="divide-y divide-neutral-100">
+          {projects.map((project) => (
+            <li key={project.id}>
+              <Link
+                href={`/clients/${project.id}`}
+                className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-neutral-50"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-navy-50 text-navy-700">
+                  <Building2 className="h-5 w-5" strokeWidth={1.9} aria-hidden="true" />
+                </span>
 
-                <ul className="mt-3 space-y-1.5">
-                  {entry.reservations.map((r) => (
-                    <li
-                      key={r.number}
-                      className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-neutral-50 px-3 py-2 text-xs"
-                    >
-                      <span className="tabular font-semibold text-navy-700">{r.number}</span>
-                      <SourceTag source={r.source} />
-                      <span className="text-neutral-600">{r.projectName}</span>
-                      <span className="text-neutral-400">·</span>
-                      <span className="text-neutral-600">{r.unitId}</span>
-                      <span className="ml-auto text-neutral-500">
-                        {STATUS_LABELS[r.status as keyof typeof STATUS_LABELS] ?? r.status}
-                        {r.approvedAt ? ` · ${formatDate(r.approvedAt)}` : ''}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-neutral-800">
+                    {project.name}
+                  </span>
+                  <span className="mt-0.5 block truncate text-xs text-neutral-500">
+                    {project.location || '—'}
+                  </span>
+                </span>
+
+                <span className="shrink-0 text-right">
+                  {project.unitsSold === 0 ? (
+                    <span className="text-xs text-neutral-400">no buyers yet</span>
+                  ) : (
+                    <>
+                      <span className="tabular block text-sm font-semibold text-navy-700">
+                        {project.unitsSold} sold
                       </span>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
-        )}
+                      <span className="mt-0.5 block text-[11px] text-neutral-500">
+                        {project.buyers} {project.buyers === 1 ? 'buyer' : 'buyers'}
+                      </span>
+                    </>
+                  )}
+                </span>
+
+                <ChevronRight
+                  className="h-4 w-4 shrink-0 text-neutral-300"
+                  strokeWidth={2}
+                  aria-hidden="true"
+                />
+              </Link>
+            </li>
+          ))}
+        </ul>
       </section>
     </div>
-  );
-}
-
-/** Which counter the sale came over. */
-function SourceTag({ source }: { source: 'Portal' | 'Internal' }) {
-  const Icon = source === 'Internal' ? Store : Globe;
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold',
-        source === 'Internal' ? 'bg-gold-100 text-gold-900' : 'bg-sky-50 text-sky-700',
-      )}
-    >
-      <Icon className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
-      {source === 'Internal' ? 'Walk-in' : 'Portal'}
-    </span>
   );
 }
