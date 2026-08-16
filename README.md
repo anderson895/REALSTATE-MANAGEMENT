@@ -280,37 +280,72 @@ installed, and a production build available — building one only if
 
 ### Opening it as an application
 
-Run `create-internal-shortcut.bat` **once per machine**. It writes a desktop
-shortcut called *SFSR Internal System*, and that shortcut is what gets used
-from then on.
+The people who use this are documentation clerks, billing staff and cashiers,
+not developers. The split below is deliberate: **setting a machine up is a
+technical job done once; using it is a double-click.** Staff are never asked to
+open a terminal, and when something breaks they are told to call someone rather
+than to fix it.
 
-Double-clicking it runs `internal-app.ps1` hidden, which:
+#### Setting up a new machine — once, by whoever administers it
 
-1. starts the local server on `127.0.0.1:3001` with no console window,
+1. Install **Node.js 22** from [nodejs.org](https://nodejs.org).
+2. Copy the project folder onto the machine. Anywhere is fine — no path is
+   hard-coded, and nothing needs editing afterwards.
+3. Put a filled-in **`.env.local`** in the project root. It is not distributed
+   with the project, and it is what decides which machines may run the system.
+4. Double-click **`create-internal-shortcut.bat`**.
+
+That last step writes the same shortcut to three places — the Desktop, the
+Start menu, and the project folder — so it can be found however the person
+looks for it. To keep it on the taskbar, open Start, type `SFSR`, right-click
+the result and choose *Pin to taskbar*; Windows removed the API that would let
+a script do that, so it is the one manual step.
+
+The **first** launch then installs dependencies and builds, which takes a few
+minutes. That path is deliberately *not* silent — it hands over to
+`run-internal.bat` in a visible window, because a hidden process doing minutes
+of work is indistinguishable from one that has failed.
+
+#### Everyday use — by staff
+
+Double-click **SFSR Internal System**. `internal-app.ps1` runs hidden and:
+
+1. starts the local server on `127.0.0.1:3001`, with no console window,
 2. waits until it answers,
-3. opens it in a chromeless browser window — no address bar, no tabs,
+3. opens it in a chromeless window — no address bar, no tabs,
 4. and stops the server again when that window is closed.
 
-Nothing is deployed and nothing is exposed. If the server was already running —
-started from a terminal, or by `run-internal.bat` — the launcher attaches to it
-and leaves it running afterwards, because it belongs to something else.
+If the server was already running — from a terminal, or `run-internal.bat` —
+the launcher attaches to it and leaves it running afterwards, because it
+belongs to something else.
 
-The first launch on a fresh copy of the project needs `npm install` and a build,
-which takes minutes. That path is deliberately **not** silent: it hands over to
-`run-internal.bat` in a visible window, because a hidden process doing several
-minutes of work is indistinguishable from one that has failed.
+Every failure message is written twice: what happened, in plain words, and then
+the technical detail under a *For your IT administrator* heading. A message
+that only says "contact IT" wastes the trip; one that only says "`.env.local`
+is missing" wastes the reader.
 
-**Two icons, because they are read from different places.** The shortcut carries
-`apps/internal/public/sfsr-internal.ico`; the window's taskbar icon comes from
-the site's favicon, `apps/internal/app/icon.png`. Both are generated from the
-same `public/logo.png` the sidebar draws, so the application and its launcher
-cannot end up showing different marks.
+#### Changing the logo
 
-> **The shortcut is convenience, not access control.** It opens a URL; the same
-> URL typed into any browser on that machine reaches the same page. What
+Replace `apps/internal/public/logo.png`, then:
+
+```bat
+powershell -ExecutionPolicy Bypass -File scripts\make-app-icon.ps1
+create-internal-shortcut.bat
+```
+
+The first regenerates both icons from that one file; the second refreshes the
+shortcuts. **Two icons are needed because they are read from different places:**
+the shortcut carries `sfsr-internal.ico`, while the taskbar icon of the open
+window comes from the site's favicon, `apps/internal/app/icon.png`. Generating
+both from one source is what stops the launcher and the application from
+showing different marks.
+
+> **The shortcut is convenience, not access control.** It opens a URL, and the
+> same URL typed into a browser on that machine reaches the same page. What
 > restricts access is the employee login and the RBAC matrix behind it. The
 > reason nobody *else* can reach it is the bind address — `127.0.0.1`, not
-> `0.0.0.0` — and that is decided by `start:internal:local`, not by this file.
+> `0.0.0.0` — and that is decided by `start:internal:local`, not by any of
+> these files.
 
 ---
 

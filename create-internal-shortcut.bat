@@ -27,6 +27,7 @@ rem  it. Neither is committed -- a .lnk stores absolute paths that mean nothing
 rem  on another machine, which is what this script exists to regenerate.
 set "LINK=%USERPROFILE%\Desktop\SFSR Internal System.lnk"
 set "LINK2=%~dp0SFSR Internal System.lnk"
+set "LINK3=%APPDATA%\Microsoft\Windows\Start Menu\Programs\SFSR Internal System.lnk"
 
 echo.
 echo   SFSR-REMS - Internal Management System
@@ -102,8 +103,31 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$s.Save()"
 
 echo   [ ok ] Shortcut created in this folder too
+
+rem  The Start menu copy is what makes it findable by typing, and it is the
+rem  one Windows lets a person right-click to pin to the taskbar. Scripts
+rem  cannot pin to the taskbar themselves -- Microsoft removed that API in
+rem  Windows 10 precisely so installers could not do it unasked.
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$s = (New-Object -ComObject WScript.Shell).CreateShortcut('%LINK3%');" ^
+  "$s.TargetPath = 'powershell.exe';" ^
+  "$s.Arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"%LAUNCHER%\"';" ^
+  "$s.WorkingDirectory = '%~dp0';" ^
+  "$s.IconLocation = '%ICON%,0';" ^
+  "$s.Description = 'St. Francis Square Realty - Internal Management System';" ^
+  "$s.WindowStyle = 7;" ^
+  "$s.Save()"
+
+echo   [ ok ] Added to the Start menu
 echo.
-echo   "SFSR Internal System" is now on your Desktop AND in this folder.
+echo   "SFSR Internal System" can now be opened from:
+echo       - the Desktop
+echo       - the Start menu ^(type "SFSR" to find it^)
+echo       - this folder
+echo.
+echo   To keep it on the taskbar: open Start, type SFSR, right-click the
+echo   result and choose "Pin to taskbar". Windows does not allow a script
+echo   to do that step for you.
 echo.
 echo   Double-click it and the system opens in its own window. The first
 echo   launch after a fresh copy of the project takes a few minutes, because
