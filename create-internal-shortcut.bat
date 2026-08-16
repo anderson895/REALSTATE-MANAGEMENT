@@ -18,7 +18,15 @@ pushd "%~dp0"
 
 set "LAUNCHER=%~dp0internal-app.ps1"
 set "ICON=%~dp0apps\internal\public\sfsr-internal.ico"
+
+rem  Two copies, because .bat and .ps1 always carry the generic Windows
+rem  file-type icon and nothing can change that. A .lnk is the only kind of
+rem  file that holds its own icon, so one goes on the Desktop for daily use and
+rem  one stays beside the project, where somebody opening the folder looks for
+rem  it. Neither is committed -- a .lnk stores absolute paths that mean nothing
+rem  on another machine, which is what this script exists to regenerate.
 set "LINK=%USERPROFILE%\Desktop\SFSR Internal System.lnk"
+set "LINK2=%~dp0SFSR Internal System.lnk"
 
 echo.
 echo   SFSR-REMS - Internal Management System
@@ -81,10 +89,21 @@ if errorlevel 1 (
   echo   [FAIL] The shortcut could not be created.
   goto :fail
 )
-
 echo   [ ok ] Shortcut created on your Desktop
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$s = (New-Object -ComObject WScript.Shell).CreateShortcut('%LINK2%');" ^
+  "$s.TargetPath = 'powershell.exe';" ^
+  "$s.Arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"%LAUNCHER%\"';" ^
+  "$s.WorkingDirectory = '%~dp0';" ^
+  "$s.IconLocation = '%ICON%,0';" ^
+  "$s.Description = 'St. Francis Square Realty - Internal Management System';" ^
+  "$s.WindowStyle = 7;" ^
+  "$s.Save()"
+
+echo   [ ok ] Shortcut created in this folder too
 echo.
-echo   "SFSR Internal System" is now on your Desktop.
+echo   "SFSR Internal System" is now on your Desktop AND in this folder.
 echo.
 echo   Double-click it and the system opens in its own window. The first
 echo   launch after a fresh copy of the project takes a few minutes, because

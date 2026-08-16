@@ -56,3 +56,6 @@ instruction.txt
 # "update" commits, which would otherwise sweep them in unnoticed.
 Questions.doc
 Questions-Answered.doc
+# Windows shortcuts hold absolute paths that mean nothing on another machine.
+# create-internal-shortcut.bat regenerates them per machine.
+*.lnk
