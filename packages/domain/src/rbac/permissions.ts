@@ -197,11 +197,17 @@ const MATRIX: Record<InternalRole, ModuleGrants> = {
    * only write access anywhere was `isAdmin()` in the Security Rules — an
    * escape hatch, not a screen. New stock had to be seeded from a workbook.
    *
-   * NOT `delete`, and that is the whole of the caution here. A unit is
+   * STILL not `delete`, and that is the whole of the caution here. A unit is
    * referenced by reservations, payments, documents and an audit trail;
    * deleting one would orphan every record that names it, and a unit taken off
    * the market is `On Hold` or `Sold`, never gone. `modify` is granted because
    * a mistyped price has to be fixable by the person who typed it.
+   *
+   * Marketing CAN remove an empty project, and that is deliberately not
+   * expressed as a `delete` grant — see `canRemoveInventory` below. A
+   * module-level delete would also permit deleting units, which is the exact
+   * thing this paragraph exists to forbid, and "no code does that yet" is not
+   * a control.
    *
    * WATCH OUT: `pricePerSqmCentavos` and `purchasePriceCentavos` are what
    * PricingService quotes a buyer from. This grant puts the price of a
@@ -353,6 +359,34 @@ export function canRaiseWalkIn(actor: InternalActor): boolean {
  */
 export function canManageMedia(actor: InternalActor): boolean {
   return actor.role === 'MARKETING' && can(actor, 'UNIT_INVENTORY', 'modify');
+}
+
+/**
+ * May this person remove a project that holds nothing?
+ *
+ * ── Why this is a capability and not a `delete` grant ────────────────────
+ *
+ * `create` without any way back produced exactly the mess the withheld
+ * `delete` was meant to prevent: a project typed by mistake goes straight to
+ * the PUBLIC portal — "JUAN PROJECT · Luxury · Ortigas · 88 floors", zero
+ * units, listed to buyers — and taking it off needed a developer with a
+ * Firestore console.
+ *
+ * The fix could have been `UNIT_INVENTORY: delete`. It is not, because that
+ * permission is module-wide and would also authorise deleting a UNIT — the one
+ * thing the matrix comment above forbids in as many words, on the grounds that
+ * reservations, payments, documents and the audit trail all name it. Granting
+ * it and relying on no code ever calling it is not a control; it is a note.
+ *
+ * So the capability is exactly as wide as the need. Removing a project with
+ * stock is not permitted by anyone, and `deleteProject` re-counts units,
+ * parking slots and reservations inside the delete rather than trusting the
+ * screen that drew the button.
+ */
+export function canRemoveInventory(actor: InternalActor): boolean {
+  // The `create` grant is the floor: whoever may put a project on the market
+  // is who may take an empty one back off it.
+  return actor.role === 'MARKETING' && can(actor, 'UNIT_INVENTORY', 'create');
 }
 
 export function clientCan(tier: ClientTier, capability: ClientCapability): boolean {

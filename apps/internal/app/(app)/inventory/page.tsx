@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Building2, Camera } from 'lucide-react';
-import { Money, UNIT_TYPES, can, canManageMedia } from '@sfsr/domain';
+import { Money, UNIT_TYPES, can, canManageMedia, canRemoveInventory } from '@sfsr/domain';
 import {
   getAdminFirestore,
   listProjects,
@@ -12,6 +12,8 @@ import { StatusBadge, cn } from '@sfsr/ui';
 import { requireModule, toActor } from '@/lib/session';
 import { AddProjectDialog } from './add-project-dialog';
 import { AddUnitDialog } from './add-unit-dialog';
+import { DeleteProjectButton } from './delete-project-button';
+import { DeleteUnitButton } from './delete-unit-button';
 import { ManageMediaDialog, type MediaTarget } from './manage-media-dialog';
 
 /**
@@ -48,6 +50,7 @@ export default async function UnitInventoryPage({
   const canAdd = can(actor, 'UNIT_INVENTORY', 'create');
   // Narrower than `canAdd` on purpose — see canManageMedia in the domain.
   const canEditMedia = canManageMedia(actor);
+  const canRemove = canRemoveInventory(actor);
 
   const db = getAdminFirestore();
   // COST: 5 reads. The counts are already on the documents.
@@ -113,7 +116,12 @@ export default async function UnitInventoryPage({
           </nav>
 
           {selected ? (
-            <UnitTable project={selected} units={units} canEditMedia={canEditMedia} />
+            <UnitTable
+              project={selected}
+              units={units}
+              canEditMedia={canEditMedia}
+              canRemove={canRemove}
+            />
           ) : null}
         </>
       )}
@@ -189,11 +197,23 @@ function UnitTable({
   project,
   units,
   canEditMedia,
+  canRemove,
 }: {
   project: ProjectSummary;
   units: readonly UnitRow[];
   canEditMedia: boolean;
+  canRemove: boolean;
 }) {
+  /*
+   * Offered only on a project holding nothing.
+   *
+   * The action re-counts units, parking and reservations and refuses anyway —
+   * that is the control. This keeps a button labelled "Remove" from sitting
+   * beside 30 sold units looking like it would take them too.
+   */
+  const removable =
+    canRemove && project.stats.totalUnits === 0 && project.stats.totalParking === 0;
+
   return (
     <section className="overflow-hidden rounded-xl border border-neutral-200/80 bg-white shadow-sm">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200/80 px-5 py-3.5">
@@ -216,6 +236,9 @@ function UnitTable({
               projectName={project.name}
               targets={projectMediaTargets(project)}
             />
+          ) : null}
+          {removable ? (
+            <DeleteProjectButton projectId={project.id} projectName={project.name} />
           ) : null}
         </div>
       </header>
@@ -242,6 +265,11 @@ function UnitTable({
                 {canEditMedia ? (
                   <th scope="col" className="px-5 py-2.5 font-semibold">
                     Photo
+                  </th>
+                ) : null}
+                {canRemove ? (
+                  <th scope="col" className="px-5 py-2.5 font-semibold">
+                    <span className="sr-only">Remove unit</span>
                   </th>
                 ) : null}
               </tr>
@@ -299,6 +327,19 @@ function UnitTable({
                           </button>
                         }
                       />
+                    </td>
+                  ) : null}
+                  {/*
+                   * Offered only on an Available unit. The action refuses the
+                   * others and re-reads the status to do it, so this is about
+                   * not putting "Remove" in the same row as the word "Sold" —
+                   * where it reads as an offer to undo a sale.
+                   */}
+                  {canRemove ? (
+                    <td className="px-5 py-3">
+                      {unit.status === 'Available' ? (
+                        <DeleteUnitButton unitId={unit.id} unitNo={unit.unitNo} />
+                      ) : null}
                     </td>
                   ) : null}
                 </tr>

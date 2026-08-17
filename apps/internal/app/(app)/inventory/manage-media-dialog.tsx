@@ -3,10 +3,10 @@
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { ImagePlus, Images } from 'lucide-react';
+import { ImagePlus, Images, Trash2 } from 'lucide-react';
 import { cloudinaryUrl } from '@sfsr/ui';
 import { Modal } from '@sfsr/ui';
-import { saveProjectMedia, type MediaSlotName } from './actions';
+import { clearProjectMedia, saveProjectMedia, type MediaSlotName } from './actions';
 
 const ACCEPTED = 'image/jpeg,image/jpg,image/png,image/webp';
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -98,9 +98,37 @@ function MediaSlotCard({ projectId, target }: { projectId: string; target: Media
   // to the previous one — the path is fixed — so nothing on the page would
   // otherwise appear to change until the CDN cache expires.
   const [justUploaded, setJustUploaded] = useState<string | null>(null);
+  // Separate from `justUploaded` being null, which only means "nothing has been
+  // uploaded in this session" and would fall back to the picture that was
+  // just removed.
+  const [cleared, setCleared] = useState(false);
   const [, startTransition] = useTransition();
 
-  const current = justUploaded ?? target.url;
+  const current = cleared ? null : (justUploaded ?? target.url);
+
+  async function remove() {
+    setError(null);
+    setBusy(true);
+    try {
+      const result = await clearProjectMedia({
+        projectId,
+        slot: target.slot,
+        unitType: target.unitType,
+        unitId: target.unitId,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setCleared(true);
+      setJustUploaded(null);
+      startTransition(() => router.refresh());
+    } catch {
+      setError('Could not remove that picture. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function upload(file: File) {
     setError(null);
@@ -181,6 +209,7 @@ function MediaSlotCard({ projectId, target }: { projectId: string; target: Media
       // Cache-busted, because the URL did not change and the browser would
       // otherwise keep showing the picture that was just replaced.
       setJustUploaded(`${result.secure_url}?v=${Date.now()}`);
+      setCleared(false);
       startTransition(() => router.refresh());
     } catch {
       setError('Upload failed. Check the connection and try again.');
@@ -232,6 +261,27 @@ function MediaSlotCard({ projectId, target }: { projectId: string; target: Media
           }}
         />
       </label>
+
+      {/*
+        * Remove, not just Replace.
+        *
+        * Uploading the wrong file is the common mistake, and without this the
+        * only way out was to upload a DIFFERENT wrong file. "No picture" is
+        * also a legitimate answer — the Portal draws its own placeholder for a
+        * project with no render, and a unit with no photo simply shows the
+        * floor plan.
+        */}
+      {current ? (
+        <button
+          type="button"
+          onClick={() => void remove()}
+          disabled={busy}
+          className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-semibold text-rose-700 transition-colors hover:bg-rose-50 disabled:opacity-60"
+        >
+          <Trash2 className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
+          Remove picture
+        </button>
+      ) : null}
 
       {error ? <p className="mt-1.5 text-[11px] text-rose-600">{error}</p> : null}
     </div>

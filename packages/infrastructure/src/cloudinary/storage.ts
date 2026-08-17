@@ -254,6 +254,26 @@ export interface MediaUploadTicket {
   readonly publicId: string;
 }
 
+/**
+ * Removes a project or unit picture from the CDN.
+ *
+ * Separate from `deleteAsset` because that one names `type: 'authenticated'`,
+ * and Cloudinary treats the delivery type as part of the asset's identity — a
+ * destroy aimed at the wrong type reports success and removes nothing.
+ *
+ * Clearing the field in Firestore is not enough on its own. These are public
+ * assets: the URL keeps working after the document stops mentioning it, so a
+ * picture removed only from the database is still a picture anyone holding the
+ * link can see.
+ */
+export async function deleteProjectMedia(projectId: string, slot: MediaSlot): Promise<void> {
+  configure();
+  await cloudinary.uploader.destroy(publicIdFor(projectId, slot), {
+    type: 'upload',
+    invalidate: true,
+  });
+}
+
 export function createProjectMediaTicket(projectId: string, slot: MediaSlot): MediaUploadTicket {
   const config = configure();
   const timestamp = Math.round(Date.now() / 1000);

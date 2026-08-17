@@ -292,6 +292,75 @@ export const announcementArchived = (
   });
 
 /**
+ * A unit was removed from the catalogue.
+ *
+ * Only ever one that is `Available` and has never been reserved — `deleteUnit`
+ * refuses anything else. So this never records the loss of a sale; it records
+ * that a unit typed by mistake, and briefly listed to buyers, is gone.
+ *
+ * The unit number and price are copied in because the document is deleted: the
+ * id alone would leave nothing to say WHICH unit, or what it was being offered
+ * for while it was on the market.
+ */
+export const unitDeleted = (
+  unit: UnitId,
+  project: ProjectId,
+  unitNo: string,
+  purchasePriceCentavos: number,
+  by: EmployeeId,
+  at: Date,
+): DomainEvent =>
+  event('unit.deleted', at, {
+    unitId: unit.value,
+    projectId: project.value,
+    unitNo,
+    purchasePriceCentavos,
+    deletedBy: by.value,
+  });
+
+/**
+ * A picture was taken off a project or a unit.
+ *
+ * Recorded separately from `projectMediaUpdated` because the outcome differs:
+ * an update leaves a picture in place, this leaves none. The Portal falls back
+ * to a placeholder, which is a visible change to what buyers see.
+ */
+export const projectMediaCleared = (
+  project: ProjectId,
+  slot: string,
+  by: EmployeeId,
+  at: Date,
+): DomainEvent =>
+  event('project.mediaCleared', at, {
+    projectId: project.value,
+    slot,
+    clearedBy: by.value,
+  });
+
+/**
+ * A project was removed from the catalogue.
+ *
+ * Only ever an EMPTY one — `deleteProject` refuses anything holding a unit, a
+ * parking slot or a reservation — so this never marks the loss of inventory.
+ * What it marks is that a name which was briefly on the public portal is gone,
+ * and the document that said so no longer exists to be read.
+ *
+ * The name is copied into the payload for that reason: after the delete there
+ * is nothing left to resolve the id against.
+ */
+export const projectDeleted = (
+  project: ProjectId,
+  name: string,
+  by: EmployeeId,
+  at: Date,
+): DomainEvent =>
+  event('project.deleted', at, {
+    projectId: project.value,
+    name,
+    deletedBy: by.value,
+  });
+
+/**
  * Marketing replaced a picture on a project.
  *
  * Audited because the path is FIXED: the new file overwrites the old one at

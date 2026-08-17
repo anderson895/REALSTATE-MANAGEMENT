@@ -226,10 +226,39 @@ by every Studio in a project; the photo is that specific room. Most units will
 never have one — these are pre-selling towers — so the Portal renders it only
 when it exists rather than showing an empty frame on every unit.
 
+A picture can also be **removed**, which destroys the CDN copy as well as
+clearing the field — these are public assets, so a picture cleared only from
+Firestore is still one anybody holding the link can open.
+
 > Marketing alone can do this, by client instruction, enforced by
 > `canManageMedia` in the domain rather than by the matrix. Sales and Account
 > Receivables hold `UNIT_INVENTORY` read-only and reach the same screen; the
 > buttons are not drawn for them and the upload route refuses them.
+
+### Taking something back off the market
+
+`create` without a way back produced the mess the withheld `delete` was meant
+to prevent: a project typed by mistake goes straight to the public Portal —
+there is no draft state and no filter on empty projects — and removing it took
+a developer with a Firestore console.
+
+Marketing can now remove **a project that holds nothing** and **a unit that is
+Available and has never been reserved**. Both conditions are re-counted inside
+the action rather than read off the screen, because a button drawn a minute ago
+must not delete a unit a buyer reserved since.
+
+| Refused when | Why |
+|---|---|
+| Project has units, parking or reservations | Those records name it and would be left pointing at nothing |
+| Unit is On Hold or Sold | A unit off the market stays on the record — that is what those statuses are for |
+| Unit has any reservation, even cancelled | The reservation survives and still names the unit |
+
+> This is deliberately **not** a `delete` grant on `UNIT_INVENTORY`. That
+> permission is module-wide and would also authorise deleting a unit outright —
+> the thing the matrix comment forbids in as many words. `canRemoveInventory`
+> is a capability instead, exactly as wide as the need, and both deletions are
+> written to the audit trail with the name and price copied in, because
+> afterwards there is no document left to read them from.
 
 > `seed:extract` requires Windows and the ACE.OLEDB provider; it reads legacy
 > `.xls` files. Two roles have no personnel sheet in the workbook at all, so

@@ -98,6 +98,7 @@ export {
 export {
   createUploadTicket,
   createProjectMediaTicket,
+  deleteProjectMedia,
   signedUrlFor,
   deleteAsset,
   ACCEPTED_MIME_TYPES,

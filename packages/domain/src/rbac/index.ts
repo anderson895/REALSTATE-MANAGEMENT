@@ -18,6 +18,7 @@ export {
   canAccessModule,
   canRaiseWalkIn,
   canManageMedia,
+  canRemoveInventory,
   modulesFor,
   clientCan,
   CLIENT_CAPABILITIES,

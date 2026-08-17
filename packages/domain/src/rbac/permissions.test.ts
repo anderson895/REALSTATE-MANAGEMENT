@@ -3,6 +3,7 @@ import {
   can,
   canAccessModule,
   canManageMedia,
+  canRemoveInventory,
   canRaiseWalkIn,
   clientCan,
   modulesFor,
@@ -339,6 +340,34 @@ describe('canRaiseWalkIn — the counter is Documentation Staff only', () => {
     for (const role of ['SALES', 'BILLING', 'IT_ADMINISTRATOR', 'LEGAL_COUNSEL'] as const) {
       expect(canRaiseWalkIn(staff(role))).toBe(false);
       expect(canRaiseWalkIn(supervisor(role))).toBe(false);
+    }
+  });
+});
+
+/**
+ * `delete` on UNIT_INVENTORY was withheld deliberately for most of the
+ * project, so the grant is pinned here rather than left to be noticed.
+ */
+describe('canRemoveInventory — taking a mistake back off the market', () => {
+  it('lets Marketing remove one', () => {
+    expect(canRemoveInventory(staff('MARKETING'))).toBe(true);
+  });
+
+  it('grants NOBODY delete on the module, which is the point', () => {
+    // A module-level delete would also authorise removing a UNIT, which the
+    // matrix comment forbids in as many words. The capability is granted
+    // instead, and stays exactly as wide as the need.
+    for (const role of INTERNAL_ROLES) {
+      expect(can(staff(role), 'UNIT_INVENTORY', 'delete')).toBe(false);
+      expect(can(supervisor(role), 'UNIT_INVENTORY', 'delete')).toBe(false);
+    }
+  });
+
+  it('refuses every role but Marketing', () => {
+    for (const role of INTERNAL_ROLES) {
+      if (role === 'MARKETING') continue;
+      expect(canRemoveInventory(staff(role))).toBe(false);
+      expect(canRemoveInventory(supervisor(role))).toBe(false);
     }
   });
 });
