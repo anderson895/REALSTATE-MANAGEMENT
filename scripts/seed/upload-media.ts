@@ -52,12 +52,25 @@ interface ProjectMedia {
 
 const MEDIA: readonly ProjectMedia[] = [
   {
-    // The Legaspi Place still has no floor plans and no render of its own
-    // (§12.10) — the amenities poster below is the first asset it has ever had.
+    /*
+     * §12.10 is closed. The Legaspi Place spent the whole project with no
+     * render and no floor plans — every one of its 30 units showed the "no
+     * floor plan available" fallback — and the client has now supplied them.
+     *
+     * The filenames break the pattern the other four follow: "1-BR-LEGASPI"
+     * with hyphens against "1BR-EMERALDPARK" without, and a hero named after
+     * the project with spaces. Mapped by hand like the rest, for the reason
+     * this file already gives: a parser would silently mis-file the odd ones.
+     */
     projectId: 'TLP001',
-    folder: '',
-    hero: null,
-    floorPlans: {},
+    folder: 'THE LEGASPI PLACE',
+    hero: 'THE LEGASPI PLACE.png',
+    floorPlans: {
+      Studio: 'STUDIO-LEGASPI.png',
+      'One Bedroom': '1-BR-LEGASPI.png',
+      'Two Bedroom': '2-BR-LEGASPI.png',
+      'Three Bedroom': '3-BR-LEGASPI.png',
+    },
     amenities: 'new/768358017_837576299444938_1702286669090552636_n.png',
   },
   {
