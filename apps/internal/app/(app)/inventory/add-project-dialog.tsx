@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Building2 } from 'lucide-react';
-import { FormError, Modal, TextField } from '@sfsr/ui';
+import { BusyOverlay, FormError, Modal, TextField } from '@sfsr/ui';
 import { suggestUnitPrefix } from '@/lib/inventory';
 import { createProject } from './actions';
 
@@ -87,6 +87,8 @@ export function AddProjectDialog() {
   }
 
   return (
+    <>
+    <BusyOverlay show={pending} label="Adding the project…" />
     <Modal
       open={open}
       onOpenChange={(next) => {
@@ -225,5 +227,6 @@ export function AddProjectDialog() {
         </div>
       </form>
     </Modal>
+    </>
   );
 }

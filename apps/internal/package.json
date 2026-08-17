@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start --port 3001 --hostname 0.0.0.0",
     "start:local": "next start --port 3001 --hostname 127.0.0.1",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "start:app": "next start --port 3101 --hostname 127.0.0.1"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.7.1",
@@ -45,5 +46,6 @@
   "engines": {
     "node": "22.x"
   },
-  "comment:engines": "Matches the workspace root. Node 22 is required because firebase-admin -> jwks-rsa requires a runtime that can require() an ES module; see the note at the repository root."
+  "comment:engines": "Matches the workspace root. Node 22 is required because firebase-admin -> jwks-rsa requires a runtime that can require() an ES module; see the note at the repository root.",
+  "comment:scripts": "start:local and start:app differ only in port, and the difference is the point. 3001 is where next dev runs, so a launcher pointed there attaches to a DEVELOPMENT server whenever one happens to be up. That is exactly what happened: the app-mode window opened against a dev build, React never hydrated, and every control on the login page was dead — the Show Password box included, which is what gave it away. 3101 belongs to the launcher alone, so the two run side by side on a developer machine and neither notices the other."
 }

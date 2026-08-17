@@ -20,7 +20,8 @@
     "test:watch": "vitest",
     "verify": "npm run typecheck && npm run lint && npm run test",
     "seed:extract": "powershell -ExecutionPolicy Bypass -File scripts/seed/extract-xls.ps1",
-    "seed:load": "tsx scripts/seed/load.ts"
+    "seed:load": "tsx scripts/seed/load.ts",
+    "start:internal:app": "npm run start:app --workspace @sfsr/internal"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.6",

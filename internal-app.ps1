@@ -13,15 +13,15 @@
 #
 # -- The server is never exposed -------------------------------------------
 #
-# 127.0.0.1 only. Not 0.0.0.0 -- nothing on the office network or the WiFi can
-# reach it, which is checked by `npm run start:internal:local`, not decided
+# 127.0.0.1 only, on a port of its own. Not 0.0.0.0 -- nothing on the network can
+# reach it, which is checked by `npm run start:internal:app`, not decided
 # here. The LAN-facing form is a separate script and stays that way.
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
 
-$Port = 3001
+$Port = 3101
 $Url = "http://127.0.0.1:$Port"
 $LogFile = Join-Path $env:TEMP 'sfsr-internal.log'
 

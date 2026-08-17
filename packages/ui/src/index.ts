@@ -25,6 +25,7 @@ export { AuthLayout } from './auth-layout';
 export { ThemeProvider, ThemeToggle, ThemeToggleCompact, useTheme } from './theme';
 export { PageHeader, Card, EmptyState, LockedState } from './page';
 export { ConfirmDialog, type ConfirmTone } from './confirm-dialog';
+export { Spinner, BusyOverlay } from './busy';
 export { Modal } from './modal';
 export {
   cloudinaryUrl,

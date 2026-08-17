@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { ImagePlus, Images, Trash2 } from 'lucide-react';
 import { cloudinaryUrl } from '@sfsr/ui';
-import { Modal } from '@sfsr/ui';
+import { BusyOverlay, Modal } from '@sfsr/ui';
 import { clearProjectMedia, saveProjectMedia, type MediaSlotName } from './actions';
 
 const ACCEPTED = 'image/jpeg,image/jpg,image/png,image/webp';
@@ -56,6 +56,16 @@ export function ManageMediaDialog({
   trigger?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  /*
+   * A COUNT, not a boolean.
+   *
+   * Each slot reports its own work, and a project dialog holds seven of them.
+   * With a flag, one card finishing would clear the overlay while another was
+   * still uploading — so this counts in and out, and the overlay lifts when
+   * the last one is done.
+   */
+  const [busyCount, setBusyCount] = useState(0);
+  const reportBusy = (busy: boolean) => setBusyCount((n) => Math.max(0, n + (busy ? 1 : -1)));
 
   return (
     <Modal
@@ -76,12 +86,14 @@ export function ManageMediaDialog({
         )
       }
     >
+      <BusyOverlay show={busyCount > 0} label="Saving the picture…" />
       <div className="grid gap-4 sm:grid-cols-2">
         {targets.map((target) => (
           <MediaSlotCard
             key={`${target.slot}-${target.unitType ?? target.unitId ?? ''}`}
             projectId={projectId}
             target={target}
+            onBusyChange={reportBusy}
           />
         ))}
       </div>
@@ -89,7 +101,15 @@ export function ManageMediaDialog({
   );
 }
 
-function MediaSlotCard({ projectId, target }: { projectId: string; target: MediaTarget }) {
+function MediaSlotCard({
+  projectId,
+  target,
+  onBusyChange,
+}: {
+  projectId: string;
+  target: MediaTarget;
+  onBusyChange: (busy: boolean) => void;
+}) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -109,6 +129,7 @@ function MediaSlotCard({ projectId, target }: { projectId: string; target: Media
   async function remove() {
     setError(null);
     setBusy(true);
+    onBusyChange(true);
     try {
       const result = await clearProjectMedia({
         projectId,
@@ -127,6 +148,7 @@ function MediaSlotCard({ projectId, target }: { projectId: string; target: Media
       setError('Could not remove that picture. Please try again.');
     } finally {
       setBusy(false);
+      onBusyChange(false);
     }
   }
 
@@ -143,6 +165,7 @@ function MediaSlotCard({ projectId, target }: { projectId: string; target: Media
     }
 
     setBusy(true);
+    onBusyChange(true);
     try {
       const ticketResponse = await fetch('/api/upload/project-media', {
         method: 'POST',
@@ -215,6 +238,7 @@ function MediaSlotCard({ projectId, target }: { projectId: string; target: Media
       setError('Upload failed. Check the connection and try again.');
     } finally {
       setBusy(false);
+      onBusyChange(false);
       // Cleared so choosing the SAME file again still fires a change event.
       if (inputRef.current) inputRef.current.value = '';
     }

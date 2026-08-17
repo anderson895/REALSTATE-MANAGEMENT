@@ -45,7 +45,9 @@ export function DeleteProjectButton({
     const result = await deleteProject(projectId);
     if (!result.ok) {
       setError(result.error);
-      return;
+      // Thrown so ConfirmDialog keeps itself open — it closes on resolve, and
+      // a closed dialog would take the explanation with it.
+      throw new Error(result.error);
     }
     startTransition(() => {
       // Back to the default project — the one just removed is no longer a
@@ -66,6 +68,8 @@ export function DeleteProjectButton({
           'It can take up to ten minutes to disappear from the public website.',
         ]}
         footnote="Recorded in the audit trail against your account."
+        error={error}
+        busyLabel="Removing project…"
         confirmLabel="Remove project"
         onConfirm={remove}
         trigger={
@@ -78,7 +82,6 @@ export function DeleteProjectButton({
           </button>
         }
       />
-      {error ? <p className="mt-1 text-[11px] text-rose-600">{error}</p> : null}
     </>
   );
 }

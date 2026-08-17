@@ -1,20 +1,17 @@
 import Link from 'next/link';
-import { Building2, Camera } from 'lucide-react';
-import { Money, UNIT_TYPES, can, canManageMedia, canRemoveInventory } from '@sfsr/domain';
+import { Building2 } from 'lucide-react';
+import { UNIT_TYPES, can, canManageMedia, canRemoveInventory } from '@sfsr/domain';
 import {
   getAdminFirestore,
   listProjects,
   listUnits,
   type ProjectSummary,
-  type UnitRow,
 } from '@sfsr/infrastructure/server';
-import { StatusBadge, cn } from '@sfsr/ui';
+import { cn } from '@sfsr/ui';
 import { requireModule, toActor } from '@/lib/session';
 import { AddProjectDialog } from './add-project-dialog';
 import { AddUnitDialog } from './add-unit-dialog';
-import { DeleteProjectButton } from './delete-project-button';
-import { DeleteUnitButton } from './delete-unit-button';
-import { ManageMediaDialog, type MediaTarget } from './manage-media-dialog';
+import { UnitTable } from './unit-table';
 
 /**
  * Unit Inventory — the catalogue, and the only place to add to it.
@@ -53,13 +50,38 @@ export default async function UnitInventoryPage({
   const canRemove = canRemoveInventory(actor);
 
   const db = getAdminFirestore();
-  // COST: 5 reads. The counts are already on the documents.
+  // COST: 6 reads. The counts are already on the documents.
   const projects = await listProjects(db);
 
   const { project: requested } = await searchParams;
   const selected = projects.find((p) => p.id === requested) ?? projects[0] ?? null;
 
-  // COST: up to 200, bounded by MAX_UNITS_PER_QUERY. Only the chosen project.
+  /*
+   * COST: up to 200, bounded by MAX_UNITS_PER_QUERY. Only the chosen project.
+   *
+   * ── Why this is not run in parallel with the projects query ──────────────
+   *
+   * It was, briefly. `?project=` is in the URL before either query starts, so
+   * the units never truly needed the project list, and running both at once
+   * looked like a free saving on a page that takes ~1.5s to switch tabs.
+   *
+   * Measured, it saved nothing: sequential 1127ms, parallel 1131ms. The
+   * Firestore Admin SDK multiplexes over one gRPC channel and these do not
+   * overlap.
+   *
+   * Nor is the row count the cost. `scripts/measure-inventory-render.ts` times
+   * the whole render, and on one run `limit: 1` took 819ms while the unlimited
+   * query took 874ms — a document is nearly free, a round trip is not. That is
+   * also why the table paginates in the browser rather than here: fetching a
+   * page at a time would add round trips to save something that does not cost
+   * anything.
+   *
+   * The three round trips a tab switch actually makes are
+   * verifySessionCookie(checkRevoked) at ~290ms, listProjects at ~563ms and
+   * this at ~800ms. So the sequential form stays, being the simpler one, and
+   * making this page faster means not making the round trip at all — caching,
+   * as the Portal does — which is a freshness decision, not a plumbing one.
+   */
   const units = selected ? await listUnits(db, selected.id) : [];
 
   return (
@@ -116,9 +138,17 @@ export default async function UnitInventoryPage({
           </nav>
 
           {selected ? (
+            /*
+             * Keyed by project so the search box and the page number reset
+             * when the tab changes. Without it React keeps the state across
+             * the navigation and you arrive at Skyline Quarter still filtered
+             * by whatever you typed on Emerald Park, looking at an empty table.
+             */
             <UnitTable
+              key={selected.id}
               project={selected}
               units={units}
+              unitTypes={UNIT_TYPES}
               canEditMedia={canEditMedia}
               canRemove={canRemove}
             />
@@ -156,204 +186,5 @@ function ProjectTab({ project, current }: { project: ProjectSummary; current: bo
         {project.id} · {project.stats.availableUnits} of {project.stats.totalUnits} available
       </span>
     </Link>
-  );
-}
-
-/**
- * Every picture a PROJECT owns, as slots the dialog can fill.
- *
- * Floor plans are offered for all five unit types rather than only the ones
- * this project currently sells, so a plan can be put in place before the units
- * that use it are added — which is the order things actually happen in, and
- * the reason Penthouse has no plan in any project today.
- */
-function projectMediaTargets(project: ProjectSummary): MediaTarget[] {
-  return [
-    {
-      slot: 'hero',
-      label: 'Project render',
-      hint: 'The main image on the project page.',
-      url: project.heroImageUrl,
-    },
-    {
-      slot: 'amenities',
-      label: 'Amenities sheet',
-      hint: 'The amenities and facilities poster.',
-      url: project.amenitiesImageUrl,
-    },
-    ...UNIT_TYPES.map(
-      (unitType): MediaTarget => ({
-        slot: 'floorPlan',
-        label: `${unitType} floor plan`,
-        hint: 'Shown on every unit of this type.',
-        url: project.floorPlans[unitType] ?? null,
-        unitType,
-      }),
-    ),
-  ];
-}
-
-function UnitTable({
-  project,
-  units,
-  canEditMedia,
-  canRemove,
-}: {
-  project: ProjectSummary;
-  units: readonly UnitRow[];
-  canEditMedia: boolean;
-  canRemove: boolean;
-}) {
-  /*
-   * Offered only on a project holding nothing.
-   *
-   * The action re-counts units, parking and reservations and refuses anyway —
-   * that is the control. This keeps a button labelled "Remove" from sitting
-   * beside 30 sold units looking like it would take them too.
-   */
-  const removable =
-    canRemove && project.stats.totalUnits === 0 && project.stats.totalParking === 0;
-
-  return (
-    <section className="overflow-hidden rounded-xl border border-neutral-200/80 bg-white shadow-sm">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200/80 px-5 py-3.5">
-        <div>
-          <h2 className="text-[11px] font-bold uppercase tracking-[0.1em] text-navy-800">
-            {project.name}
-          </h2>
-          <p className="mt-0.5 text-[11px] text-neutral-500">
-            {project.buildingType} · {project.location} · {project.floors} floors
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-[11px] font-medium text-neutral-500">
-            {project.stats.availableUnits} available · {project.stats.onHoldUnits} on hold ·{' '}
-            {project.stats.soldUnits} sold
-          </span>
-          {canEditMedia ? (
-            <ManageMediaDialog
-              projectId={project.id}
-              projectName={project.name}
-              targets={projectMediaTargets(project)}
-            />
-          ) : null}
-          {removable ? (
-            <DeleteProjectButton projectId={project.id} projectName={project.name} />
-          ) : null}
-        </div>
-      </header>
-
-      {units.length === 0 ? (
-        <div className="px-6 py-14 text-center">
-          <p className="text-sm font-medium text-navy-800">No units in this project yet</p>
-          <p className="mx-auto mt-1.5 max-w-md text-sm text-neutral-500">
-            Use “Add unit” above. The first one becomes {project.code}&rsquo;s 001.
-          </p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[46rem] text-sm">
-            <thead>
-              <tr className="text-left text-[10px] uppercase tracking-[0.08em] text-neutral-500">
-                <th scope="col" className="px-5 py-2.5 font-semibold">Unit ID</th>
-                <th scope="col" className="px-5 py-2.5 font-semibold">Unit No.</th>
-                <th scope="col" className="px-5 py-2.5 font-semibold">Tower / Floor</th>
-                <th scope="col" className="px-5 py-2.5 font-semibold">Type</th>
-                <th scope="col" className="px-5 py-2.5 text-right font-semibold">Area</th>
-                <th scope="col" className="px-5 py-2.5 text-right font-semibold">Price</th>
-                <th scope="col" className="px-5 py-2.5 font-semibold">Status</th>
-                {canEditMedia ? (
-                  <th scope="col" className="px-5 py-2.5 font-semibold">
-                    Photo
-                  </th>
-                ) : null}
-                {canRemove ? (
-                  <th scope="col" className="px-5 py-2.5 font-semibold">
-                    <span className="sr-only">Remove unit</span>
-                  </th>
-                ) : null}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-100">
-              {units.map((unit) => (
-                <tr key={unit.id} className="transition-colors hover:bg-navy-50/60">
-                  <td className="tabular px-5 py-3 font-semibold text-navy-700">{unit.id}</td>
-                  <td className="px-5 py-3 text-neutral-700">{unit.unitNo}</td>
-                  <td className="px-5 py-3 text-neutral-500">
-                    {[unit.tower, `Floor ${unit.floor}`].filter(Boolean).join(' · ')}
-                  </td>
-                  <td className="px-5 py-3 text-neutral-700">{unit.unitType}</td>
-                  <td className="tabular px-5 py-3 text-right text-neutral-700">
-                    {unit.areaSqm} sqm
-                  </td>
-                  <td className="tabular px-5 py-3 text-right font-medium text-neutral-800">
-                    {Money.fromCentavos(unit.purchasePriceCentavos).format()}
-                  </td>
-                  <td className="px-5 py-3">
-                    <StatusBadge status={unit.status} />
-                  </td>
-                  {/*
-                   * A photograph of THIS room, distinct from the floor plan,
-                   * which is shared by every unit of the same type. Most units
-                   * will never have one — these are pre-selling towers — so the
-                   * cell reads "Add" rather than presenting an empty frame.
-                   */}
-                  {canEditMedia ? (
-                    <td className="px-5 py-3">
-                      <ManageMediaDialog
-                        projectId={project.id}
-                        projectName={`${project.name} · ${unit.unitNo}`}
-                        targets={[
-                          {
-                            slot: 'unitPhoto',
-                            label: `Photo of ${unit.unitNo}`,
-                            hint: 'This specific unit, not the floor plan.',
-                            url: unit.photoUrl,
-                            unitId: unit.id,
-                          },
-                        ]}
-                        trigger={
-                          <button
-                            type="button"
-                            className={cn(
-                              'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors',
-                              unit.photoUrl
-                                ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                                : 'border-neutral-200 bg-white text-neutral-500 hover:border-navy-300 hover:text-navy-700',
-                            )}
-                          >
-                            <Camera className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
-                            {unit.photoUrl ? 'Change' : 'Add'}
-                          </button>
-                        }
-                      />
-                    </td>
-                  ) : null}
-                  {/*
-                   * Offered only on an Available unit. The action refuses the
-                   * others and re-reads the status to do it, so this is about
-                   * not putting "Remove" in the same row as the word "Sold" —
-                   * where it reads as an offer to undo a sale.
-                   */}
-                  {canRemove ? (
-                    <td className="px-5 py-3">
-                      {unit.status === 'Available' ? (
-                        <DeleteUnitButton unitId={unit.id} unitNo={unit.unitNo} />
-                      ) : null}
-                    </td>
-                  ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <p className="border-t border-neutral-200/80 px-5 py-3 text-[11px] leading-relaxed text-neutral-500">
-        Status is not edited here. A unit becomes On Hold when Billing verifies a reservation fee
-        and Sold when a supervisor approves — the reservation workflow owns it, so a unit can never
-        read Sold with nothing behind it.
-      </p>
-    </section>
   );
 }

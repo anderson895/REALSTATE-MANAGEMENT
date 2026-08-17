@@ -368,7 +368,7 @@ of work is indistinguishable from one that has failed.
 
 Double-click **SFSR Internal System**. `internal-app.ps1` runs hidden and:
 
-1. starts the local server on `127.0.0.1:3001`, with no console window,
+1. starts the local server on `127.0.0.1:3101`, with no console window,
 2. waits until it answers,
 3. opens it in a chromeless window — no address bar, no tabs,
 4. and stops the server again when that window is closed.
@@ -376,6 +376,15 @@ Double-click **SFSR Internal System**. `internal-app.ps1` runs hidden and:
 If the server was already running — from a terminal, or `run-internal.bat` —
 the launcher attaches to it and leaves it running afterwards, because it
 belongs to something else.
+
+**3101, not 3001, and the difference is load-bearing.** The launcher decides
+"is the server up?" by asking the port, so pointing it at 3001 means it
+attaches to whatever is there — including a `next dev` server. That is not
+hypothetical: it happened. The window opened against a development build, React
+never hydrated, and every control on the login page was dead, down to the *Show
+Password* checkbox. Nothing reported an error, because from the launcher's side
+the server had answered. On its own port it cannot mistake one for the other,
+and a developer can run both at once.
 
 Every failure message is written twice: what happened, in plain words, and then
 the technical detail under a *For your IT administrator* heading. A message
@@ -402,8 +411,7 @@ showing different marks.
 > same URL typed into a browser on that machine reaches the same page. What
 > restricts access is the employee login and the RBAC matrix behind it. The
 > reason nobody *else* can reach it is the bind address — `127.0.0.1`, not
-> `0.0.0.0` — and that is decided by `start:internal:local`, not by any of
-> these files.
+> `0.0.0.0` — and that is decided by `start:app`, not by any of these files.
 
 ---
 

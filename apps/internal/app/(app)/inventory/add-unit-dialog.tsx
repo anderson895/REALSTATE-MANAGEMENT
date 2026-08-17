@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import { UNIT_TYPES, type UnitType } from '@sfsr/domain';
-import { FormError, Modal, TextField, fieldClass } from '@sfsr/ui';
+import { BusyOverlay, FormError, Modal, TextField, fieldClass } from '@sfsr/ui';
 import { derivePurchasePrice } from '@/lib/inventory';
 import { createUnit } from './actions';
 
@@ -91,6 +91,8 @@ export function AddUnitDialog({ projects }: { projects: readonly ProjectChoice[]
   }
 
   return (
+    <>
+    <BusyOverlay show={pending} label="Adding the unit…" />
     <Modal
       open={open}
       onOpenChange={(next) => {
@@ -269,5 +271,6 @@ export function AddUnitDialog({ projects }: { projects: readonly ProjectChoice[]
         </div>
       </form>
     </Modal>
+    </>
   );
 }

@@ -43,14 +43,23 @@ describe('projectSchema', () => {
     expect(parsed.unitPrefix).toBe('MP');
   });
 
-  it('holds the code to the shape the seeded five use', () => {
-    for (const code of ['MP6', 'MPR0006', 'MPR', '006', 'MPR-006']) {
-      expect(projectSchema.safeParse(project({ code })).success).toBe(false);
+  it('holds the code to letters-then-digits, and nothing narrower', () => {
+    // Each refusal earns its place: no digits and no letters both break
+    // `suggestUnitPrefix`, which splits the code on its trailing digits, and a
+    // hyphen is not safe in the Cloudinary path the code becomes.
+    for (const code of ['MPR', '006', 'MPR-006', 'MP6', 'MPR123456']) {
+      expect(projectSchema.safeParse(project({ code })).success, code).toBe(false);
     }
+
     // GVR004 and HPR004 share a number in the real data — the digits are not a
     // sequence, so only the shape is checked.
-    for (const code of ['TLP001', 'EPR002', 'GVR004', 'HPR004', 'MP006']) {
-      expect(projectSchema.safeParse(project({ code })).success).toBe(true);
+    //
+    // MPR0099 is in this list because it used to be REFUSED. Exactly three
+    // digits was the shape of the seeded five, not a requirement of anything,
+    // and enforcing it turned a house style into a wall somebody hit while
+    // naming a building.
+    for (const code of ['TLP001', 'EPR002', 'GVR004', 'HPR004', 'MP006', 'MPR0099', 'ABCD12345']) {
+      expect(projectSchema.safeParse(project({ code })).success, code).toBe(true);
     }
   });
 

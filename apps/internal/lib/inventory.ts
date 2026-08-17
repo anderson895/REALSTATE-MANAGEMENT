@@ -23,12 +23,26 @@ const required = (label: string) => z.string().trim().min(1, `${label} is requir
 /**
  * A project code, which is also its document id.
  *
- * `TLP001`, `EPR002`, `SQR003`, `GVR004`, `HPR004` — two to four letters then
- * three digits. Note that GVR004 and HPR004 share a number: the digits are not
- * a sequence and never were, so this validates the SHAPE and leaves the value
- * to whoever is naming the building.
+ * `TLP001`, `EPR002`, `SQR003`, `GVR004`, `HPR004` — letters then digits. Note
+ * that GVR004 and HPR004 share a number: the digits are not a sequence and
+ * never were, so this validates the SHAPE and leaves the value to whoever is
+ * naming the building.
+ *
+ * ── Why the digits are a range and not exactly three ─────────────────────
+ *
+ * They were fixed at three, to match the seeded five, and nothing needed them
+ * to be. The only reader of a project code is `suggestUnitPrefix`, which
+ * strips trailing digits with `\d+$` and does not care how many there are.
+ * What the code actually has to satisfy is that it becomes a Firestore
+ * document id, a URL segment on `/projects/[projectId]`, and a Cloudinary
+ * folder name — and `[A-Z0-9]` clears all three at any length.
+ *
+ * So the rule that rejected `MPR0099` was house style enforced as a
+ * constraint. Widened rather than dropped: the letters-then-digits shape IS
+ * load-bearing for the prefix suggestion, and a code that reads like the other
+ * five is worth keeping as the default.
  */
-export const PROJECT_CODE_PATTERN = /^[A-Z]{2,4}\d{3}$/;
+export const PROJECT_CODE_PATTERN = /^[A-Z]{2,4}\d{2,5}$/;
 
 /**
  * The letters a project's unit ids begin with.
@@ -42,9 +56,9 @@ export const UNIT_PREFIX_PATTERN = /^[A-Z]{1,4}$/;
 
 export const projectSchema = z.object({
   code: required('Project code')
-    .max(8)
+    .max(9)
     .transform((v) => v.toUpperCase())
-    .refine((v) => PROJECT_CODE_PATTERN.test(v), 'Use 2–4 letters then 3 digits, e.g. MPR006.'),
+    .refine((v) => PROJECT_CODE_PATTERN.test(v), 'Use 2–4 letters then 2–5 digits, e.g. MPR006.'),
   name: required('Project name').max(120),
   developer: required('Developer').max(120),
   location: required('Location').max(160),

@@ -4,7 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getClientAuth } from '@sfsr/infrastructure';
-import { Checkbox, FormError, TextField } from '@sfsr/ui';
+import { BusyOverlay, Checkbox, FormError, TextField } from '@sfsr/ui';
 import { EyeToggle, Icon } from './icons';
 
 /**
@@ -56,23 +56,45 @@ export function LoginForm() {
       if (!response.ok) {
         const body = (await response.json()) as { error?: string };
         setError(body.error ?? 'Sign-in failed.');
+        setBusy(false);
         return;
       }
 
       const body = (await response.json()) as { mustChangePassword?: boolean };
       router.push(body.mustChangePassword ? '/change-password' : (params.get('next') ?? '/'));
       router.refresh();
+      /*
+       * Deliberately still busy.
+       *
+       * This used to clear in a `finally`, which meant the spinner stopped the
+       * instant the cookie was set — and the cookie is set BEFORE the
+       * navigation, not after it. The dashboard behind this is a server render
+       * with its own round trips, so the button went back to reading "SIGN IN"
+       * for a second or more while the browser was still fetching. To someone
+       * who is not a developer that is a sign-in that did nothing, and the
+       * reasonable response is to press it again.
+       *
+       * Nothing needs to switch it off: the navigation replaces this component.
+       */
     } catch {
       // One message for "no such user" and "wrong password" alike — a
       // different message for each is a username oracle.
       setError('Incorrect username or password.');
-    } finally {
       setBusy(false);
     }
   }
 
   return (
     <form onSubmit={onSubmit} className="space-y-3.5">
+      {/*
+       * The wait here is the longest in the app — Firebase sign-in, then the
+       * session cookie, then a full server render of the dashboard. The button
+       * spinner alone is a 16px mark at the bottom of a form the eye has just
+       * left, so the overlay says it at the size of the screen and stops a
+       * second submission while it is true.
+       */}
+      <BusyOverlay show={busy} label="Signing you in…" />
+
       {/* Both fields are required, so the asterisk marks nothing out. */}
       <TextField
         label="Username"
