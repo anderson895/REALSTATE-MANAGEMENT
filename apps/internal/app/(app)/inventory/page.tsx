@@ -3,11 +3,11 @@ import { Building2 } from 'lucide-react';
 import { UNIT_TYPES, can, canManageMedia, canRemoveInventory } from '@sfsr/domain';
 import {
   getAdminFirestore,
-  listProjects,
   listUnits,
   type ProjectSummary,
 } from '@sfsr/infrastructure/server';
 import { cn } from '@sfsr/ui';
+import { getCachedProjects } from '@/lib/catalog';
 import { requireModule, toActor } from '@/lib/session';
 import { AddProjectDialog } from './add-project-dialog';
 import { AddUnitDialog } from './add-unit-dialog';
@@ -50,8 +50,14 @@ export default async function UnitInventoryPage({
   const canRemove = canRemoveInventory(actor);
 
   const db = getAdminFirestore();
-  // COST: 6 reads. The counts are already on the documents.
-  const projects = await listProjects(db);
+  /*
+   * COST: 6 reads, and 0 on a warm cache — which is most of them, because
+   * clicking between project tabs happens in seconds and the window is a
+   * minute. Measured A/B over five tabs: 1501ms uncached, 713ms with this.
+   * See lib/catalog.ts for why the units are deliberately not treated the
+   * same way.
+   */
+  const projects = await getCachedProjects();
 
   const { project: requested } = await searchParams;
   const selected = projects.find((p) => p.id === requested) ?? projects[0] ?? null;
@@ -76,11 +82,12 @@ export default async function UnitInventoryPage({
    * page at a time would add round trips to save something that does not cost
    * anything.
    *
-   * The three round trips a tab switch actually makes are
+   * The three round trips a tab switch makes are
    * verifySessionCookie(checkRevoked) at ~290ms, listProjects at ~563ms and
-   * this at ~800ms. So the sequential form stays, being the simpler one, and
-   * making this page faster means not making the round trip at all — caching,
-   * as the Portal does — which is a freshness decision, not a plumbing one.
+   * this at ~800ms. The middle one is now cached; this one is deliberately not,
+   * because it carries `status` and a minute-old "Available" on the screen a
+   * clerk is reading is the wrong kind of wrong. So the sequential form stays,
+   * being the simpler one.
    */
   const units = selected ? await listUnits(db, selected.id) : [];
 
