@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { Building2 } from 'lucide-react';
-import { Money, can } from '@sfsr/domain';
+import { Building2, Camera } from 'lucide-react';
+import { Money, UNIT_TYPES, can, canManageMedia } from '@sfsr/domain';
 import {
   getAdminFirestore,
   listProjects,
@@ -12,6 +12,7 @@ import { StatusBadge, cn } from '@sfsr/ui';
 import { requireModule, toActor } from '@/lib/session';
 import { AddProjectDialog } from './add-project-dialog';
 import { AddUnitDialog } from './add-unit-dialog';
+import { ManageMediaDialog, type MediaTarget } from './manage-media-dialog';
 
 /**
  * Unit Inventory — the catalogue, and the only place to add to it.
@@ -45,6 +46,8 @@ export default async function UnitInventoryPage({
   const session = await requireModule('UNIT_INVENTORY');
   const actor = toActor(session);
   const canAdd = can(actor, 'UNIT_INVENTORY', 'create');
+  // Narrower than `canAdd` on purpose — see canManageMedia in the domain.
+  const canEditMedia = canManageMedia(actor);
 
   const db = getAdminFirestore();
   // COST: 5 reads. The counts are already on the documents.
@@ -109,7 +112,9 @@ export default async function UnitInventoryPage({
             ))}
           </nav>
 
-          {selected ? <UnitTable project={selected} units={units} /> : null}
+          {selected ? (
+            <UnitTable project={selected} units={units} canEditMedia={canEditMedia} />
+          ) : null}
         </>
       )}
     </div>
@@ -146,7 +151,49 @@ function ProjectTab({ project, current }: { project: ProjectSummary; current: bo
   );
 }
 
-function UnitTable({ project, units }: { project: ProjectSummary; units: readonly UnitRow[] }) {
+/**
+ * Every picture a PROJECT owns, as slots the dialog can fill.
+ *
+ * Floor plans are offered for all five unit types rather than only the ones
+ * this project currently sells, so a plan can be put in place before the units
+ * that use it are added — which is the order things actually happen in, and
+ * the reason Penthouse has no plan in any project today.
+ */
+function projectMediaTargets(project: ProjectSummary): MediaTarget[] {
+  return [
+    {
+      slot: 'hero',
+      label: 'Project render',
+      hint: 'The main image on the project page.',
+      url: project.heroImageUrl,
+    },
+    {
+      slot: 'amenities',
+      label: 'Amenities sheet',
+      hint: 'The amenities and facilities poster.',
+      url: project.amenitiesImageUrl,
+    },
+    ...UNIT_TYPES.map(
+      (unitType): MediaTarget => ({
+        slot: 'floorPlan',
+        label: `${unitType} floor plan`,
+        hint: 'Shown on every unit of this type.',
+        url: project.floorPlans[unitType] ?? null,
+        unitType,
+      }),
+    ),
+  ];
+}
+
+function UnitTable({
+  project,
+  units,
+  canEditMedia,
+}: {
+  project: ProjectSummary;
+  units: readonly UnitRow[];
+  canEditMedia: boolean;
+}) {
   return (
     <section className="overflow-hidden rounded-xl border border-neutral-200/80 bg-white shadow-sm">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200/80 px-5 py-3.5">
@@ -158,10 +205,19 @@ function UnitTable({ project, units }: { project: ProjectSummary; units: readonl
             {project.buildingType} · {project.location} · {project.floors} floors
           </p>
         </div>
-        <span className="text-[11px] font-medium text-neutral-500">
-          {project.stats.availableUnits} available · {project.stats.onHoldUnits} on hold ·{' '}
-          {project.stats.soldUnits} sold
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] font-medium text-neutral-500">
+            {project.stats.availableUnits} available · {project.stats.onHoldUnits} on hold ·{' '}
+            {project.stats.soldUnits} sold
+          </span>
+          {canEditMedia ? (
+            <ManageMediaDialog
+              projectId={project.id}
+              projectName={project.name}
+              targets={projectMediaTargets(project)}
+            />
+          ) : null}
+        </div>
       </header>
 
       {units.length === 0 ? (
@@ -183,6 +239,11 @@ function UnitTable({ project, units }: { project: ProjectSummary; units: readonl
                 <th scope="col" className="px-5 py-2.5 text-right font-semibold">Area</th>
                 <th scope="col" className="px-5 py-2.5 text-right font-semibold">Price</th>
                 <th scope="col" className="px-5 py-2.5 font-semibold">Status</th>
+                {canEditMedia ? (
+                  <th scope="col" className="px-5 py-2.5 font-semibold">
+                    Photo
+                  </th>
+                ) : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
@@ -203,6 +264,43 @@ function UnitTable({ project, units }: { project: ProjectSummary; units: readonl
                   <td className="px-5 py-3">
                     <StatusBadge status={unit.status} />
                   </td>
+                  {/*
+                   * A photograph of THIS room, distinct from the floor plan,
+                   * which is shared by every unit of the same type. Most units
+                   * will never have one — these are pre-selling towers — so the
+                   * cell reads "Add" rather than presenting an empty frame.
+                   */}
+                  {canEditMedia ? (
+                    <td className="px-5 py-3">
+                      <ManageMediaDialog
+                        projectId={project.id}
+                        projectName={`${project.name} · ${unit.unitNo}`}
+                        targets={[
+                          {
+                            slot: 'unitPhoto',
+                            label: `Photo of ${unit.unitNo}`,
+                            hint: 'This specific unit, not the floor plan.',
+                            url: unit.photoUrl,
+                            unitId: unit.id,
+                          },
+                        ]}
+                        trigger={
+                          <button
+                            type="button"
+                            className={cn(
+                              'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors',
+                              unit.photoUrl
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                                : 'border-neutral-200 bg-white text-neutral-500 hover:border-navy-300 hover:text-navy-700',
+                            )}
+                          >
+                            <Camera className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
+                            {unit.photoUrl ? 'Change' : 'Add'}
+                          </button>
+                        }
+                      />
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>

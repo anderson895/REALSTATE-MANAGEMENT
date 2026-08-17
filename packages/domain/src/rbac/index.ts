@@ -17,6 +17,7 @@ export {
   can,
   canAccessModule,
   canRaiseWalkIn,
+  canManageMedia,
   modulesFor,
   clientCan,
   CLIENT_CAPABILITIES,

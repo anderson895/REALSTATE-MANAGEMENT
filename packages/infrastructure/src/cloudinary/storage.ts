@@ -184,3 +184,94 @@ export async function deleteAsset(publicId: string): Promise<void> {
   configure();
   await cloudinary.uploader.destroy(publicId, { type: 'authenticated' });
 }
+
+/**
+ * Which picture on a project this upload is replacing.
+ *
+ * A closed set, because the `public_id` is built from it and a free-text slot
+ * would let the caller aim an upload anywhere in the account.
+ */
+export type MediaSlot =
+  | { readonly kind: 'hero' }
+  | { readonly kind: 'amenities' }
+  | { readonly kind: 'floorPlan'; readonly unitType: string }
+  | { readonly kind: 'unitPhoto'; readonly unitId: string };
+
+/** `Three Bedroom` -> `three-bedroom`. Must match scripts/seed/upload-media.ts. */
+function slugify(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+/**
+ * Where each slot lives. FIXED, and deliberately identical to the paths
+ * `scripts/seed/upload-media.ts` writes.
+ *
+ * Marketing replacing a floor plan from the browser has to land on the same
+ * asset the seed script would, or the two become separate pictures with the
+ * same meaning and the next `upload-media` run silently undoes the edit.
+ */
+function publicIdFor(projectId: string, slot: MediaSlot): string {
+  const base = `sfsr/projects/${projectId}`;
+  switch (slot.kind) {
+    case 'hero':
+      return `${base}/hero`;
+    case 'amenities':
+      return `${base}/amenities`;
+    case 'floorPlan':
+      return `${base}/floorplans/${slugify(slot.unitType)}`;
+    case 'unitPhoto':
+      return `${base}/units/${slugify(slot.unitId)}`;
+  }
+}
+
+/**
+ * Signs one replacement of a project or unit picture.
+ *
+ * ── Why this is not `createUploadTicket` ─────────────────────────────────
+ *
+ * That one appends a timestamp to every `public_id`, because a buyer uploading
+ * a second payment receipt must not overwrite the first — the old one is
+ * evidence. Marketing replacing a floor plan wants the opposite: the SAME
+ * public_id every time, so the new picture takes the place of the old one and
+ * every page already pointing at that URL updates without being rewritten.
+ *
+ * ── What is still derived server-side ────────────────────────────────────
+ *
+ * The whole path. The caller names a project and a slot from a closed set, and
+ * everything else is built here — the same rule the buyer-side ticket follows,
+ * for the same reason: a request that could choose its own `public_id` could
+ * overwrite any asset in the account, including somebody's government ID.
+ *
+ * Delivery is `upload`, the public CDN, because these are advertisements. The
+ * corollary is the one on ASSET_POLICY above: nothing personal may be uploaded
+ * through this route.
+ */
+export interface MediaUploadTicket {
+  readonly cloudName: string;
+  readonly apiKey: string;
+  readonly signature: string;
+  readonly timestamp: number;
+  readonly publicId: string;
+}
+
+export function createProjectMediaTicket(projectId: string, slot: MediaSlot): MediaUploadTicket {
+  const config = configure();
+  const timestamp = Math.round(Date.now() / 1000);
+  const publicId = publicIdFor(projectId, slot);
+
+  // `overwrite` and `invalidate` are signed as well as sent: they are what
+  // make a replacement replace, and what clears the CDN's copy of the old
+  // picture so staff do not spend an hour wondering why nothing changed.
+  const signature = cloudinary.utils.api_sign_request(
+    { public_id: publicId, timestamp, overwrite: true, invalidate: true },
+    config.apiSecret,
+  );
+
+  return {
+    cloudName: config.cloudName,
+    apiKey: config.apiKey,
+    signature,
+    timestamp,
+    publicId,
+  };
+}

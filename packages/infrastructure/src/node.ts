@@ -97,6 +97,7 @@ export {
 
 export {
   createUploadTicket,
+  createProjectMediaTicket,
   signedUrlFor,
   deleteAsset,
   ACCEPTED_MIME_TYPES,
@@ -104,6 +105,8 @@ export {
   MAX_UPLOAD_BYTES,
   type AssetKind,
   type UploadTicket,
+  type MediaUploadTicket,
+  type MediaSlot,
   type SignedAssetOptions,
 } from './cloudinary/storage';
 

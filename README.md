@@ -202,6 +202,35 @@ Amenity posters live in `CONDOMINIUM PROJECTS/new/` and are uploaded by
 the poster: the poster's labels are baked into the pixels, so on a phone it is
 decoration and the list is the content.
 
+### Changing pictures without a developer
+
+`upload-media.ts` reads files off a developer's disk, so a project added from
+the Unit Inventory screen had no way to ever get a picture. **Marketing** can
+now replace them in place, from `/inventory` → *Pictures*:
+
+| Slot | Cloudinary path |
+|---|---|
+| Project render | `sfsr/projects/{id}/hero` |
+| Amenities sheet | `sfsr/projects/{id}/amenities` |
+| Floor plan, per unit type | `sfsr/projects/{id}/floorplans/{type}` |
+| Photo of one unit | `sfsr/projects/{id}/units/{unitId}` |
+
+The paths are **the same ones `upload-media.ts` writes**, so a picture changed
+in the browser and one loaded from disk are the same asset rather than two —
+without that, the next seed run would silently undo Marketing's edit. It also
+means uploading REPLACES: the old picture is gone, which is why the change is
+written to the audit trail.
+
+A unit photo is distinct from a floor plan. The plan is per unit *type*, shared
+by every Studio in a project; the photo is that specific room. Most units will
+never have one — these are pre-selling towers — so the Portal renders it only
+when it exists rather than showing an empty frame on every unit.
+
+> Marketing alone can do this, by client instruction, enforced by
+> `canManageMedia` in the domain rather than by the matrix. Sales and Account
+> Receivables hold `UNIT_INVENTORY` read-only and reach the same screen; the
+> buttons are not drawn for them and the upload route refuses them.
+
 > `seed:extract` requires Windows and the ACE.OLEDB provider; it reads legacy
 > `.xls` files. Two roles have no personnel sheet in the workbook at all, so
 > Sales and Marketing accounts come from hand-maintained overlay fixtures

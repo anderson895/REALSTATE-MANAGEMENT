@@ -138,6 +138,17 @@ export interface UnitRow {
   readonly pricePerSqmCentavos: number;
   readonly purchasePriceCentavos: number;
   readonly status: string;
+  /**
+   * A photograph of THIS unit, set by Marketing.
+   *
+   * Distinct from the project's floor plan, which is per unit TYPE — every
+   * Studio in a project shares one drawing. This is the actual room, and most
+   * units will never have one: these are pre-selling towers, and a unit that
+   * does not exist yet cannot be photographed. Null is the normal case, so the
+   * pages that render it must treat the plan as the fallback rather than the
+   * other way round.
+   */
+  readonly photoUrl: string | null;
 }
 
 function toUnitRow(id: string, raw: FirebaseFirestore.DocumentData): UnitRow {
@@ -152,6 +163,7 @@ function toUnitRow(id: string, raw: FirebaseFirestore.DocumentData): UnitRow {
     pricePerSqmCentavos: Number(raw.pricePerSqmCentavos ?? 0),
     purchasePriceCentavos: Number(raw.purchasePriceCentavos ?? 0),
     status: String(raw.status ?? 'Available'),
+    photoUrl: raw.photoUrl ? String(raw.photoUrl) : null,
   };
 }
 

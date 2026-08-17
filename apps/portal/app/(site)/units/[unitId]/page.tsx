@@ -73,6 +73,39 @@ export default async function UnitPage({ params }: { params: Promise<{ unitId: s
 
       <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr]">
         <div className="space-y-6">
+          {/*
+           * A photograph of THIS unit, when Marketing has published one.
+           *
+           * Above the floor plan, because a room is more use to a buyer than a
+           * drawing of one — but rendered only when it exists, and never as a
+           * placeholder. These are pre-selling towers: most units cannot be
+           * photographed yet, and an empty frame on every one of them would
+           * read as something broken rather than something absent.
+           */}
+          {unit.photoUrl ? (
+            <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+              <h2 className="border-b border-neutral-200 px-5 py-3 text-sm font-medium dark:border-neutral-800">
+                Unit {unit.unitNo}
+              </h2>
+              <a
+                href={cloudinaryUrl(unit.photoUrl, { width: 1600 })}
+                target="_blank"
+                rel="noreferrer"
+                className="block"
+              >
+                <div className="relative aspect-[4/3] bg-neutral-50 dark:bg-neutral-800">
+                  <Image
+                    src={cloudinaryUrl(unit.photoUrl, { width: 900, height: 675, crop: 'fill' })}
+                    alt={`Unit ${unit.unitNo} at ${project.name}`}
+                    fill
+                    sizes="(max-width: 1024px) 100vw, 45vw"
+                    className="object-cover"
+                  />
+                </div>
+              </a>
+            </section>
+          ) : null}
+
           <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
             <h2 className="border-b border-neutral-200 px-5 py-3 text-sm font-medium dark:border-neutral-800">
               Floor plan

@@ -291,6 +291,28 @@ export const announcementArchived = (
     archivedBy: by.value,
   });
 
+/**
+ * Marketing replaced a picture on a project.
+ *
+ * Audited because the path is FIXED: the new file overwrites the old one at
+ * the same Cloudinary id, so the previous picture is gone and this entry is
+ * the only record that it ever existed or that anything changed. A hero image
+ * that quietly becomes the wrong building has no other trail.
+ *
+ * `slot` names what was replaced — `hero`, `amenities`, or `floorPlan:Studio`.
+ */
+export const projectMediaUpdated = (
+  project: ProjectId,
+  slot: string,
+  by: EmployeeId,
+  at: Date,
+): DomainEvent =>
+  event('project.mediaUpdated', at, {
+    projectId: project.value,
+    slot,
+    updatedBy: by.value,
+  });
+
 // ── Clients ──────────────────────────────────────────────────────────────────
 
 /**

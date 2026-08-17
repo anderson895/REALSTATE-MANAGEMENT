@@ -331,6 +331,30 @@ export function canRaiseWalkIn(actor: InternalActor): boolean {
   return !actor.isSupervisor && can(actor, 'RESERVATION_VERIFICATION', 'create');
 }
 
+/**
+ * May this person change the pictures on a project or a unit?
+ *
+ * Marketing only, by client instruction — the department that owns how the
+ * company presents itself is the one that owns its imagery.
+ *
+ * ── Why the role is named here, when nothing else names a role ───────────
+ *
+ * Every other check in this file asks the MATRIX and never the role, because
+ * the matrix is transcribed from RBAC.xls and naming a role in code is how the
+ * two drift apart. This is the exception, and it is narrower than it looks:
+ * `UNIT_INVENTORY: modify` is held by Marketing alone today, so the extra
+ * clause changes nothing about who gets in. What it does is fix the answer if
+ * that grant is ever widened — Sales and Account Receivables hold this module
+ * read-only, and a future edit giving either of them `modify` for some
+ * unrelated reason would otherwise hand them the company's photography.
+ *
+ * The matrix is still the floor: a role that cannot modify inventory cannot
+ * reach this either, whatever it is called.
+ */
+export function canManageMedia(actor: InternalActor): boolean {
+  return actor.role === 'MARKETING' && can(actor, 'UNIT_INVENTORY', 'modify');
+}
+
 export function clientCan(tier: ClientTier, capability: ClientCapability): boolean {
   return CLIENT_MATRIX[tier].includes(capability);
 }

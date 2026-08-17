@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   can,
   canAccessModule,
+  canManageMedia,
   canRaiseWalkIn,
   clientCan,
   modulesFor,
@@ -338,6 +339,39 @@ describe('canRaiseWalkIn — the counter is Documentation Staff only', () => {
     for (const role of ['SALES', 'BILLING', 'IT_ADMINISTRATOR', 'LEGAL_COUNSEL'] as const) {
       expect(canRaiseWalkIn(staff(role))).toBe(false);
       expect(canRaiseWalkIn(supervisor(role))).toBe(false);
+    }
+  });
+});
+
+/**
+ * "lagyan din pala ang marketing ng mapag uupdatetan ng mga pictures ng mga
+ * projects and unit" — the department that owns how the company presents
+ * itself owns its imagery.
+ */
+describe('canManageMedia — project and unit pictures', () => {
+  it('lets Marketing in', () => {
+    expect(canManageMedia(staff('MARKETING'))).toBe(true);
+    expect(canManageMedia(supervisor('MARKETING'))).toBe(true);
+  });
+
+  it('keeps out the roles that only READ inventory', () => {
+    // Both hold UNIT_INVENTORY, neither holds modify. They quote buyers from
+    // the catalogue; they do not decide what it looks like.
+    expect(canManageMedia(staff('SALES'))).toBe(false);
+    expect(canManageMedia(staff('ACCOUNT_RECEIVABLES'))).toBe(false);
+  });
+
+  it('keeps out IT, who administer the system but do not market it', () => {
+    expect(canManageMedia(staff('IT_ADMINISTRATOR'))).toBe(false);
+    expect(canManageMedia(supervisor('IT_ADMINISTRATOR'))).toBe(false);
+  });
+
+  it('is not satisfied by the modify grant alone', () => {
+    // The point of naming the role. Documentation can modify plenty, and none
+    // of it is the company's photography.
+    for (const role of INTERNAL_ROLES) {
+      if (role === 'MARKETING') continue;
+      expect(canManageMedia(staff(role))).toBe(false);
     }
   });
 });

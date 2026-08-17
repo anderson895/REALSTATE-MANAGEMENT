@@ -8,9 +8,12 @@ import {
   ProjectId,
   UnitId,
   can,
+  canManageMedia,
   projectCreated,
+  projectMediaUpdated,
   unitCreated,
 } from '@sfsr/domain';
+import { publicConfig } from '@sfsr/infrastructure';
 import {
   FirestoreAuditLogger,
   getAdminFirestore,
@@ -281,5 +284,108 @@ export async function createUnit(payload: unknown): Promise<InventoryResult> {
     }
     console.error('Unit creation failed:', error);
     return { ok: false, error: 'Could not add the unit. Please try again.' };
+  }
+}
+
+/**
+ * Records a picture Marketing has just uploaded.
+ *
+ * The bytes are already in Cloudinary by the time this runs — the browser sent
+ * them straight there with a ticket signed by
+ * `/api/upload/project-media`. All that is left is to point the document at
+ * the result, which is the half that decides whether anybody ever sees it.
+ *
+ * ── Why the URL is not trusted as sent ───────────────────────────────────
+ *
+ * It arrives from a browser, so it could be any address at all — including one
+ * pointing somewhere off-site. A project document is read by the public Portal
+ * and rendered into an `<img>`, so an arbitrary URL here is an arbitrary
+ * request made by every visitor. It is therefore required to be a Cloudinary
+ * delivery URL for THIS account, and to contain the exact `public_id` the
+ * ticket route derived for the slot.
+ *
+ * ── What this does not do ────────────────────────────────────────────────
+ *
+ * It does not delete the old picture. The path is fixed, so Cloudinary has
+ * already overwritten it — there is nothing left to delete, and a `destroy`
+ * call here would be aimed at the asset that was just uploaded.
+ */
+export type MediaSlotName = 'hero' | 'amenities' | 'floorPlan' | 'unitPhoto';
+
+export async function saveProjectMedia(payload: {
+  projectId: string;
+  slot: MediaSlotName;
+  url: string;
+  unitType?: string;
+  unitId?: string;
+}): Promise<InventoryResult> {
+  const session = await requireModule('UNIT_INVENTORY');
+  const actor = toActor(session);
+  if (!canManageMedia(actor)) {
+    return { ok: false, error: 'Only Marketing can change project and unit pictures.' };
+  }
+
+  const { projectId, slot, url, unitType, unitId } = payload;
+  const db = getAdminFirestore();
+  const config = publicConfig.cloudinary.cloudName;
+
+  if (!url.startsWith(`https://res.cloudinary.com/${config}/`)) {
+    return { ok: false, error: 'That image did not come from our media library.' };
+  }
+
+  try {
+    if (slot === 'unitPhoto') {
+      if (!unitId) return { ok: false, error: 'Unit is required.' };
+      const unit = await db.collection('units').doc(unitId).get();
+      if (!unit.exists || String(unit.data()?.projectId ?? '') !== projectId) {
+        return { ok: false, error: 'That unit is not in this project.' };
+      }
+      await db.collection('units').doc(unitId).update({
+        photoUrl: url,
+        mediaUpdatedAt: FieldValue.serverTimestamp(),
+      });
+      updateTag('units');
+      revalidatePath('/inventory');
+      return { ok: true, id: unitId };
+    }
+
+    const ref = db.collection('projects').doc(projectId);
+    if (!(await ref.get()).exists) {
+      return { ok: false, error: 'That project does not exist.' };
+    }
+
+    if (slot === 'floorPlan') {
+      if (!unitType) return { ok: false, error: 'Unit type is required.' };
+      // Dot-path so one plan is replaced without rewriting the map — two people
+      // editing different types at once would otherwise overwrite each other.
+      await ref.update({
+        [`floorPlans.${unitType}`]: url,
+        mediaUpdatedAt: FieldValue.serverTimestamp(),
+      });
+    } else {
+      await ref.update({
+        [slot === 'hero' ? 'heroImageUrl' : 'amenitiesImageUrl']: url,
+        mediaUpdatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    await new FirestoreAuditLogger(db).record(
+      [
+        projectMediaUpdated(
+          new ProjectId(projectId),
+          slot === 'floorPlan' ? `${slot}:${unitType}` : slot,
+          new EmployeeId(session.employeeId),
+          new Date(),
+        ),
+      ],
+      session.employeeId,
+    );
+
+    updateTag('projects');
+    revalidatePath('/inventory');
+    return { ok: true, id: projectId };
+  } catch (error) {
+    console.error('Saving project media failed:', error);
+    return { ok: false, error: 'Could not save that picture. Please try again.' };
   }
 }
