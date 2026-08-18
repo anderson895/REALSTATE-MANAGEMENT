@@ -53,6 +53,78 @@ export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
 export const PAYMENT_CHANNELS = ['Bank Deposit', 'Online Banking', 'GCash', 'Maya'] as const;
 export type PaymentChannel = (typeof PAYMENT_CHANNELS)[number];
 
+/**
+ * WHERE the reservation fee is actually sent.
+ *
+ * From `Development_Guide/bank-ewallet-details.doc`: "painsert po pala dito
+ * yung details kung san po magdeposit ng payment. After po ng summary."
+ *
+ * Until this existed the Portal asked a buyer to pay ₱50,000 and then to upload
+ * the receipt, without ever saying to whom — every account number came over the
+ * phone from an agent. That is also the shape of the commonest fraud in
+ * pre-selling: a buyer who was never shown an official account has no way to
+ * tell a real one from a substituted one.
+ *
+ * ── Beside PAYMENT_CHANNELS on purpose ───────────────────────────────────
+ *
+ * `channels` ties each destination to the entries a buyer can pick above, so
+ * the two lists cannot drift into a channel with nowhere to send money, or a
+ * published account no channel reaches. Same argument as the note on
+ * PAYMENT_CHANNELS itself: the walk-in counter is a second door, and a second
+ * copy of an account number is the one that goes stale after the company
+ * changes banks.
+ *
+ * ── Two departures from the source document ──────────────────────────────
+ *
+ * It reads "Bank of the Philippines Islands". The institution is Bank of the
+ * Philippine Islands, and this is rendered on the screen where somebody decides
+ * whether the page is genuine before parting with ₱50,000 — a misspelt bank is
+ * exactly what a careful buyer is checking for.
+ *
+ * It also labels the Maya block "GCash Merchant Name" and "GCash Wallet
+ * Number", plainly a copy of the block above it. The labels here are neutral
+ * and the wallet is named once, in `label`, so the same mistake cannot be made
+ * twice.
+ *
+ * Both are corrections to wording, not to numbers. Every digit below is
+ * verbatim from the document and must stay that way.
+ */
+export interface RemittanceAccount {
+  readonly label: string;
+  readonly channels: readonly PaymentChannel[];
+  /** Label/value pairs, in the order they should be read. */
+  readonly details: readonly (readonly [string, string])[];
+}
+
+export const REMITTANCE_ACCOUNTS: readonly RemittanceAccount[] = [
+  {
+    label: 'Bank Transfer / Deposit',
+    channels: ['Bank Deposit', 'Online Banking'],
+    details: [
+      ['Bank name', 'Bank of the Philippine Islands'],
+      ['Account name', 'St. Francis Square Realty Corp'],
+      ['Account number', '2429661326'],
+      ['Account type', 'Savings Account'],
+    ],
+  },
+  {
+    label: 'GCash Wallet',
+    channels: ['GCash'],
+    details: [
+      ['Merchant name', 'St. Francis Square Realty Corp'],
+      ['Wallet number', '09173770767'],
+    ],
+  },
+  {
+    label: 'Maya Wallet',
+    channels: ['Maya'],
+    details: [
+      ['Merchant name', 'St. Francis Square Realty Corp'],
+      ['Wallet number', '09420689658'],
+    ],
+  },
+] as const;
+
 /** Civil status options on the buyer information step. RESERVATION.doc STEP 2. */
 export const CIVIL_STATUSES = ['Single', 'Married', 'Widowed', 'Separated'] as const;
 export type CivilStatus = (typeof CIVIL_STATUSES)[number];

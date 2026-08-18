@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFICIENCY_CURE_HOURS,
   DOCUMENT_SUBMISSION_DAYS,
+  PAYMENT_CHANNELS,
+  REMITTANCE_ACCOUNTS,
   RESERVATION_STATUSES,
   Reservation,
   isVisibleToSales,
@@ -512,5 +514,51 @@ describe('curing a deficiency raised after both desks finished', () => {
     const r = makeReservation();
     r.verifyPayment(BILLING, AT);
     expect(() => r.verifyPayment(SUPERVISOR, AT)).toThrow(BusinessRuleViolationError);
+  });
+});
+
+describe('REMITTANCE_ACCOUNTS', () => {
+  it('gives every payment channel somewhere to send the money', () => {
+    // The failure this prevents is silent and expensive: a channel a buyer can
+    // select on the form, with no published account behind it, sends them off
+    // to pay ₱50,000 to nobody.
+    const served = new Set(REMITTANCE_ACCOUNTS.flatMap((a) => a.channels));
+    for (const channel of PAYMENT_CHANNELS) {
+      expect(served.has(channel), channel).toBe(true);
+    }
+  });
+
+  it('publishes no account that no channel reaches', () => {
+    // The mirror of the above, and the one that catches a bank account left
+    // behind on the page after the channel it belonged to was withdrawn.
+    for (const account of REMITTANCE_ACCOUNTS) {
+      expect(account.channels.length, account.label).toBeGreaterThan(0);
+      for (const channel of account.channels) {
+        expect(PAYMENT_CHANNELS, account.label).toContain(channel);
+      }
+    }
+  });
+
+  it('carries the digits from bank-ewallet-details.doc exactly', () => {
+    // Transcribed once, from a document, by hand. These are account numbers:
+    // a transposed digit is an irreversible transfer to a stranger, and it
+    // would look entirely correct on the screen.
+    const flat = Object.fromEntries(
+      REMITTANCE_ACCOUNTS.flatMap((a) => a.details.map(([k, v]) => [`${a.label} · ${k}`, v])),
+    );
+    expect(flat['Bank Transfer / Deposit · Account number']).toBe('2429661326');
+    expect(flat['GCash Wallet · Wallet number']).toBe('09173770767');
+    expect(flat['Maya Wallet · Wallet number']).toBe('09420689658');
+  });
+
+  it('names one account holder, and names it the same way every time', () => {
+    // Three spellings of the payee is what makes a buyer stop and ring an
+    // agent, which is the moment a substituted account number gets offered.
+    const holders = new Set(
+      REMITTANCE_ACCOUNTS.flatMap((a) =>
+        a.details.filter(([k]) => k.endsWith('name') && k !== 'Bank name').map(([, v]) => v),
+      ),
+    );
+    expect([...holders]).toEqual(['St. Francis Square Realty Corp']);
   });
 });

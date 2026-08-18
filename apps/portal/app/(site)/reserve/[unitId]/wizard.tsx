@@ -9,6 +9,7 @@ import {
   Money,
   PAYMENT_TERMS,
   PricingService,
+  REMITTANCE_ACCOUNTS,
   type DownPaymentTier,
   type FinancingOption,
   type IdType,
@@ -615,6 +616,14 @@ export function ReservationWizard({
                 <Row label="Balance on total purchase price" value={summary.balanceOnTotalPurchasePrice.format()} strong />
               </Section>
             ) : null}
+            {/*
+             * "After po ng summary" — bank-ewallet-details.doc, and literally
+             * here: the buyer has just been shown what they owe, and the next
+             * thing they do is leave to go and pay it. Putting this on the
+             * following step instead would be too late, because by then they
+             * are uploading a receipt for a transfer already made.
+             */}
+            <RemittanceDetails amount={Money.fromCentavos(reservationFeeCentavos)} />
           </StepPanel>
         ) : null}
 
@@ -1038,6 +1047,74 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
     <div className="flex justify-between gap-4 py-2">
       <dt className="text-neutral-500">{label}</dt>
       <dd className={cn('tabular text-right', strong && 'font-semibold')}>{value}</dd>
+    </div>
+  );
+}
+
+/**
+ * Where to send the reservation fee.
+ *
+ * ── Why it is emphasised rather than listed quietly ──────────────────────
+ *
+ * This is the only screen in the flow that a buyer will copy digits off, and
+ * they will do it into a banking app, once, for ₱50,000. So the account numbers
+ * are set in `tabular` at a size that survives being read off a phone at arm's
+ * length, and each option is boxed rather than run together — three sets of
+ * "Account name / number" in one column is how somebody pays the right amount
+ * into the wrong wallet.
+ *
+ * `select-all` on the values, because the alternative to selecting cleanly is
+ * retyping, and a mistyped account number is an unrecoverable transfer.
+ *
+ * The accounts themselves are in @sfsr/domain beside PAYMENT_CHANNELS, not
+ * here — see the note there for why one list serves both the Portal and the
+ * walk-in counter.
+ */
+function RemittanceDetails({ amount }: { amount: Money }) {
+  return (
+    <div className="mt-6 overflow-hidden rounded-md border border-brand-200 dark:border-brand-900">
+      <div className="border-b border-brand-200 bg-brand-50 px-4 py-2.5 dark:border-brand-900 dark:bg-brand-900/40">
+        <p className="text-[11px] font-bold uppercase tracking-wide text-brand-700 dark:text-brand-300">
+          Reservation Fee Payment Details
+        </p>
+        <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
+          To secure your unit, please pay the{' '}
+          <span className="tabular font-semibold text-neutral-900 dark:text-neutral-100">
+            {amount.format()}
+          </span>{' '}
+          reservation fee through any of the following channels.
+        </p>
+      </div>
+
+      <div className="grid gap-px bg-neutral-200 sm:grid-cols-3 dark:bg-neutral-800">
+        {REMITTANCE_ACCOUNTS.map((account, i) => (
+          <div key={account.label} className="bg-white p-4 dark:bg-neutral-950">
+            <p className="text-xs font-semibold text-neutral-900 dark:text-neutral-100">
+              Option {i + 1}: {account.label}
+            </p>
+            <dl className="mt-2 space-y-1.5">
+              {account.details.map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-[11px] uppercase tracking-wide text-neutral-400">{label}</dt>
+                  <dd className="tabular select-all text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                    {value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        ))}
+      </div>
+
+      {/*
+       * The document's own closing line, kept because it is the one that
+       * explains the deadline rather than merely imposing it — a hold that
+       * lapses without warning reads as the system losing the reservation.
+       */}
+      <p className="border-t border-neutral-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800 dark:border-neutral-800 dark:bg-amber-950/50 dark:text-amber-300">
+        <span className="font-semibold">Payment verification.</span> Please provide your payment
+        details immediately to prevent the system from automatically releasing your unit hold.
+      </p>
     </div>
   );
 }
