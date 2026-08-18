@@ -59,3 +59,19 @@ Questions-Answered.doc
 # Windows shortcuts hold absolute paths that mean nothing on another machine.
 # create-internal-shortcut.bat regenerates them per machine.
 *.lnk
+# ── The client's own documents ────────────────────────────────────────────
+#
+# Moved to a PRIVATE repository:
+#   https://github.com/anderson895/SFSR-REMS-Development-Guide
+#
+# The RBAC matrix, the employee roster, the reservation procedure and the
+# company's bank and e-wallet details are St. Francis Square Realty's papers,
+# not the project's, and none of them had to be world-readable for the code to
+# be. The code still cites them by name and section — README §5.1 says how to
+# put them back on disk.
+#
+# Ignored rather than merely removed, and the distinction matters here: this
+# repository is committed with `git add .`-style "update" commits, exactly as
+# the note above about Questions.doc says. Without this line the whole folder
+# walks straight back into the next one.
+Development_Guide/

@@ -155,7 +155,9 @@ npm run dev:internal           # http://localhost:3001
 ### Seeding
 
 The catalogue and the staff roster are imported from the client's workbooks in
-`Development_Guide/`.
+`Development_Guide/`, which is **not in this repository** — see
+[§7](#7-where-the-requirements-come-from). Without it `npm run seed:extract`
+has nothing to read.
 
 ```bash
 npm run seed:extract                                   # .xls → scripts/seed/data/*.json
@@ -432,8 +434,29 @@ in-browser tesseract check and is already listed in both apps'
 
 ## 7. Where the requirements come from
 
-`Development_Guide/` holds the client's own documents, and the code cites them
-by section rather than paraphrasing:
+The client's own documents live in a **private** repository:
+
+> **[anderson895/SFSR-REMS-Development-Guide](https://github.com/anderson895/SFSR-REMS-Development-Guide)** — access by request to the repository owner.
+
+They were in this repository until they were not. The RBAC matrix, the employee
+roster, the reservation procedure and the company's bank and e-wallet details
+are St. Francis Square Realty's papers rather than the project's, and none of
+them had to be world-readable for the code to be. What is gone is the paperwork;
+every rule it sets is still here, argued in a comment at the code that
+implements it.
+
+To work on anything that reads them — `npm run seed:extract` above, or simply
+following a `§`-reference — clone the private repository into the path the code
+still expects:
+
+```bash
+git clone https://github.com/anderson895/SFSR-REMS-Development-Guide.git Development_Guide
+```
+
+`Development_Guide/` is in `.gitignore`, so a clone placed there will not be
+committed back into this one.
+
+The code cites these by section rather than paraphrasing:
 
 | File | Governs |
 |---|---|
