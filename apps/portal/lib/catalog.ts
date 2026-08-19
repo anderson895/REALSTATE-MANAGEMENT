@@ -1,4 +1,5 @@
 import { unstable_cache } from 'next/cache';
+import { isListedToBuyers } from '@sfsr/domain';
 import {
   getAdminFirestore,
   getProject,
@@ -105,6 +106,32 @@ export const getCachedUnits = unstable_cache(
   ['catalog', 'units'],
   { revalidate: BROWSE_TTL_SECONDS, tags: ['units'] },
 );
+
+/**
+ * Every unit in a project that a buyer is allowed to see.
+ *
+ * ── Why this wraps the cache rather than the query ───────────────────────
+ *
+ * `getCachedUnits` deliberately fetches the WHOLE project — see the note on it
+ * — so that one cache entry serves every filter combination. Pushing the
+ * buyer-visibility rule down into Firestore would undo exactly that, and give
+ * On-Hold units their own second entry for nobody to read.
+ *
+ * Withholding is presentation, not storage. The rule itself is
+ * `isListedToBuyers` in @sfsr/domain, which is where the client's instruction
+ * is written down; this only decides where it gets applied.
+ *
+ * ── What must keep using the unfiltered version ──────────────────────────
+ *
+ * `createReservation` re-reads the unit UNCACHED inside its transaction, and
+ * that check is what actually prevents a double sale. This is a catalogue
+ * filter and nothing more — it makes a unit unbrowsable, not unreservable, and
+ * it would be a mistake to start relying on it for the latter.
+ */
+export async function getListedUnits(projectId: string): Promise<UnitRow[]> {
+  const units = await getCachedUnits(projectId);
+  return units.filter(isListedToBuyers);
+}
 
 export interface UnitQuery {
   readonly tower?: string;

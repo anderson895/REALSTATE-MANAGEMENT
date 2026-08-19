@@ -23,7 +23,7 @@ export function UnitFilters({
   unitTypes,
 }: {
   projectId: string;
-  current: { tower?: string; type?: string; status?: string };
+  current: { tower?: string; type?: string };
   towers: readonly string[];
   unitTypes: readonly string[];
 }) {
@@ -32,27 +32,27 @@ export function UnitFilters({
     const params = new URLSearchParams();
     if (next.tower) params.set('tower', next.tower);
     if (next.type) params.set('type', next.type);
-    if (next.status) params.set('status', next.status);
     const qs = params.toString();
     return `/projects/${projectId}${qs ? `?${qs}` : ''}`;
   };
 
-  const active = Boolean(current.tower ?? current.type ?? current.status);
+  const active = Boolean(current.tower ?? current.type);
 
+  /*
+   * There was a Status row here — All / Available / On Hold / Sold.
+   *
+   * comments.doc: "No need na po makita ng prospect buyer/buyer ang on hold at
+   * sold. Meron lang access ng status ng unit ay ang authorized employee which
+   * is Billing, documentation, marketing and sales."
+   *
+   * Removing the chips alone would have been theatre: the page read `?status=`
+   * straight from the URL, so typing it still worked. The filter is gone from
+   * the page as well, and the units it would have revealed never leave
+   * `getListedUnits`. Internal keeps the full picture, which is where the
+   * client put the permission.
+   */
   return (
     <div className="mb-4 space-y-2.5">
-      <FilterRow
-        label="Status"
-        options={[
-          { label: 'All', value: null },
-          { label: 'Available', value: 'Available' },
-          { label: 'On Hold', value: 'On Hold' },
-          { label: 'Sold', value: 'Sold' },
-        ]}
-        selected={current.status ?? null}
-        hrefFor={(value) => href({ status: value ?? undefined })}
-      />
-
       {unitTypes.length > 1 ? (
         <FilterRow
           label="Type"

@@ -130,9 +130,24 @@
   --color-gold-800: #8f7220;
   --color-gold-900: #665117;
 
-  /* Page background behind the cards. Slightly cooler than neutral-50, which
-     is what stops a white card from disappearing into the page. */
-  --color-canvas: #f7f8fa;
+  /* Page background behind the cards.
+   *
+   * Was #f7f8fa — a cool blue-grey, which is what a screen looks like when
+   * nobody chose a colour. comments.doc, on the Available Units tab: "yung
+   * background nalang ung ok sa mata yung kulay para d boring."
+   *
+   * #f4f6f3 is the same lightness, turned a few degrees toward the brand green
+   * (#234b31). It reads as warm paper rather than grey glass, which is easier
+   * to sit in front of, and it makes the white cards look deliberately white
+   * instead of very slightly dirty — a warm card on a cool page is what made
+   * the old pairing feel cheap.
+   *
+   * Kept this faint on purpose. Anything stronger tints the photographs and
+   * fights the green chrome, and a listing page is a backdrop for units.
+   *
+   * One token, both shells: PublicShell and the signed-in Sidebar each set
+   * `bg-canvas`, so a buyer does not cross a colour change at sign-in. */
+  --color-canvas: #f4f6f3;
 
   /* Unit lifecycle colours, used by both apps so a status never looks
      different depending on which system you are in (§3.1). */

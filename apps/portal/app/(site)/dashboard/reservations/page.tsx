@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import type { Metadata } from 'next';
 import { Money } from '@sfsr/domain';
 import { getAdminFirestore } from '@sfsr/infrastructure/server';
@@ -96,17 +95,18 @@ export default async function MyReservationsPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
+      {/*
+       * No "Browse Units" button here any more.
+       *
+       * comments.doc: "Padelete nalang po nung browse unit. Same lang kasi sya
+       * sa browse condominium projects." Both went to `/projects` under two
+       * different names, which is worse than a duplicate — it implies two
+       * destinations and delivers one. The empty state below keeps the single
+       * honest wording, and the sidebar carries both routes regardless.
+       */}
       <PageHeader
         title="My Reservations"
         description="Track every reservation you have submitted, from application through to Contract to Sell."
-        action={
-          <Link
-            href="/projects"
-            className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
-          >
-            Browse Units
-          </Link>
-        }
       />
 
       {reservations.length === 0 ? (

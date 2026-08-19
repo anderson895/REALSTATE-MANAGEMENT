@@ -1,10 +1,9 @@
 import Link from 'next/link';
-import Image from 'next/image';
 import type { Metadata } from 'next';
-import { Money } from '@sfsr/domain';
+import { Money, listedUnitTypes } from '@sfsr/domain';
 import type { UnitRow } from '@sfsr/infrastructure/server';
-import { EmptyState, StatusBadge, cloudinaryUrl } from '@sfsr/ui';
-import { filterUnits, getCachedProjects, getCachedUnits } from '@/lib/catalog';
+import { EmptyState } from '@sfsr/ui';
+import { filterUnits, getCachedProjects, getListedUnits } from '@/lib/catalog';
 import { formatRange, formatShort } from '@/lib/format';
 import { UnitSearchBar } from './unit-search-bar';
 
@@ -50,7 +49,6 @@ interface TypeGroup {
   readonly projectName: string;
   readonly location: string;
   readonly unitType: string;
-  readonly floorPlanUrl: string | null;
   readonly count: number;
   readonly minArea: number;
   readonly maxArea: number;
@@ -82,19 +80,25 @@ export default async function UnitsPage({
 
   const projects = await getCachedProjects();
   const searched = projectId ? projects.filter((p) => p.id === projectId) : projects;
-  const perProject = await Promise.all(searched.map((p) => getCachedUnits(p.id)));
 
-  // Only genuinely available units: one someone else is already processing
-  // should not be advertised as an option.
+  /*
+   * `getListedUnits` already drops everything a buyer may not see — anything
+   * not Available, and any withheld type. The explicit `status: 'Available'`
+   * that used to be in the filter below has gone with it, so there is one
+   * place that decides this rather than two that could disagree.
+   */
+  const perProject = await Promise.all(searched.map((p) => getListedUnits(p.id)));
+
   const units = filterUnits(perProject.flat(), {
-    status: 'Available',
     unitType,
     minCentavos: min,
     maxCentavos: max,
   });
 
   const projectById = new Map(projects.map((p) => [p.id, p]));
-  const unitTypes = [...new Set(projects.flatMap((p) => p.stats.unitTypes))].sort();
+  const unitTypes = listedUnitTypes(
+    [...new Set(projects.flatMap((p) => p.stats.unitTypes))].sort(),
+  );
 
   // A price filter cuts across types, and picking a type inside a project means
   // the buyer has already opened that card — both want the actual units.
@@ -169,10 +173,6 @@ function groupByType(
         projectName: project?.name ?? projectId,
         location: project?.location ?? '',
         unitType,
-        // The floor plan is the only picture in the inventory that actually
-        // DIFFERS between these cards — the building render is identical for
-        // every type in a project, so it could not tell them apart.
-        floorPlanUrl: project?.floorPlans[unitType] ?? null,
         count: group.length,
         minArea: Math.min(...areas),
         maxArea: Math.max(...areas),
@@ -211,44 +211,58 @@ function Header({
   );
 }
 
+/**
+ * One card per unit type per project — now without the picture.
+ *
+ * comments.doc: "Padelete nalang po nung mga picture nung floor plan pag
+ * i-click ung Available units tab. Wala po dapat mga picture. Search bar na
+ * lang po para d overwhelming sa mata."
+ *
+ * ── What the images were doing, and why losing them is fine ──────────────
+ *
+ * They were the floor plan for the type, chosen because it is the only picture
+ * in the inventory that differs between these cards — the building render is
+ * identical for every type in a project. But at 600px wide a floor plan is a
+ * grey tangle of lines: it filled three quarters of each card and told a buyer
+ * nothing they could act on, and twenty-five of them at once is exactly the
+ * "overwhelming sa mata" being complained about. The plans are still one click
+ * away, full size, on the project page and on each unit.
+ *
+ * What is left is what a buyer actually chooses between: type, project, size,
+ * price, how many are left. Denser rows fit more of that on one screen, which
+ * is the real answer to a page that was hard to scan.
+ */
 function TypeCards({ groups }: { groups: readonly TypeGroup[] }) {
   return (
-    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {groups.map((g) => (
         <Link
           key={g.key}
           href={`/units?project=${encodeURIComponent(g.projectId)}&type=${encodeURIComponent(g.unitType)}`}
-          className="group overflow-hidden rounded-xl border border-neutral-200 bg-white transition hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-lg"
+          className="group flex flex-col rounded-xl border border-neutral-200 bg-white p-4 transition hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-md"
         >
-          <div className="relative aspect-[4/3] bg-neutral-50">
-            {g.floorPlanUrl ? (
-              <Image
-                src={cloudinaryUrl(g.floorPlanUrl, { width: 600, height: 450, crop: 'fit' })}
-                alt={`${g.unitType} floor plan`}
-                fill
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                className="object-contain p-2"
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-xs text-neutral-400">
-                Floor plan coming soon
-              </div>
-            )}
-            <span className="absolute right-2 top-2 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="truncate font-semibold group-hover:text-brand-700">{g.unitType}</h2>
+              <p className="mt-0.5 truncate text-xs text-neutral-500">{g.projectName}</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold text-brand-700">
               {g.count} available
             </span>
           </div>
 
-          <div className="border-t border-neutral-100 p-4">
-            <h2 className="font-semibold group-hover:text-brand-700">{g.unitType}</h2>
-            <p className="mt-0.5 text-xs text-neutral-500">{g.projectName}</p>
-            <p className="mt-2 text-xs text-neutral-500">
-              {g.minArea === g.maxArea ? `${g.minArea} sqm` : `${g.minArea}–${g.maxArea} sqm`}
-            </p>
-            <p className="tabular mt-1 text-sm font-bold text-brand-600">
-              {formatRange(g.minPrice, g.maxPrice)}
-            </p>
-          </div>
+          <p className="mt-3 text-xs text-neutral-500">
+            {g.location ? `${g.location} · ` : ''}
+            {g.minArea === g.maxArea ? `${g.minArea} sqm` : `${g.minArea}–${g.maxArea} sqm`}
+          </p>
+
+          <p className="tabular mt-2 text-sm font-bold text-brand-600">
+            {formatRange(g.minPrice, g.maxPrice)}
+          </p>
+
+          <span className="mt-3 border-t border-neutral-100 pt-2.5 text-xs font-semibold text-neutral-400 group-hover:text-brand-600">
+            See the units &rarr;
+          </span>
         </Link>
       ))}
     </div>
@@ -309,7 +323,6 @@ function FlatList({
                   {projectById.get(unit.projectId)?.name ?? unit.projectId}
                 </p>
               </div>
-              <StatusBadge status={unit.status} />
             </div>
 
             <p className="mt-2 text-xs text-neutral-500">
@@ -360,9 +373,6 @@ function FlatList({
                   {Money.fromCentavos(unit.purchasePriceCentavos).format()}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <span className="mr-3 align-middle">
-                    <StatusBadge status={unit.status} />
-                  </span>
                   <Link
                     href={`/units/${unit.id}`}
                     className="text-xs font-semibold text-brand-600 hover:text-accent-500"

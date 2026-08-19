@@ -1,10 +1,10 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Money } from '@sfsr/domain';
+import { Money, listedUnitTypes } from '@sfsr/domain';
 import type { UnitRow } from '@sfsr/infrastructure/server';
-import { StatusBadge, cloudinaryUrl } from '@sfsr/ui';
-import { filterUnits, getCachedProject, getCachedUnits } from '@/lib/catalog';
+import { cloudinaryUrl } from '@sfsr/ui';
+import { filterUnits, getCachedProject, getListedUnits } from '@/lib/catalog';
 import { formatRange } from '@/lib/format';
 import { UnitFilters } from './unit-filters';
 
@@ -27,10 +27,18 @@ export default async function ProjectPage({
   const first = (value: string | string[] | undefined): string | undefined =>
     Array.isArray(value) ? value[0] : value;
 
+  /*
+   * No `status` any more, and its absence is the point.
+   *
+   * comments.doc: "No need na po makita ng prospect buyer/buyer ang on hold at
+   * sold." A status filter cannot be offered on a page that only ever holds
+   * one status — and leaving `?status=Sold` readable from the URL would have
+   * kept the leak open for anyone who typed it, which is the version of this
+   * that looks fixed and is not.
+   */
   const filters = {
     tower: first(query.tower),
     unitType: first(query.type),
-    status: first(query.status),
   };
 
   // COST on a cache miss: 1 read for the project + one per unit in it (at most
@@ -38,7 +46,7 @@ export default async function ProjectPage({
   // because the whole project is cached once and narrowed in memory below.
   const [project, allUnits] = await Promise.all([
     getCachedProject(projectId),
-    getCachedUnits(projectId),
+    getListedUnits(projectId),
   ]);
 
   if (!project) notFound();
@@ -50,7 +58,7 @@ export default async function ProjectPage({
   // filtered rows made the Tower column vanish the moment someone filtered to
   // a type that happens to sit in one tower.
   const hasTower = allUnits.some((u) => u.tower !== null);
-  const filtered = Boolean(filters.tower ?? filters.unitType ?? filters.status);
+  const filtered = Boolean(filters.tower ?? filters.unitType);
 
   // Types this project actually sells, paired with the client's copy for them.
   //
@@ -59,10 +67,20 @@ export default async function ProjectPage({
   // an advertisement for something unbuyable. The fallback matters for The
   // Legaspi Place, which has copy and amenities but no seeded inventory yet —
   // without it that project would show no unit types at all.
-  const sellingTypes =
+  // Withheld types are stripped here too, not only from the filter. A blurb
+  // headed "Penthouse" above a list with no Penthouse in it is an
+  // advertisement for something the buyer cannot then find.
+  const sellingTypes = listedUnitTypes(
     project.stats.unitTypes.length > 0
       ? project.stats.unitTypes
-      : Object.keys(project.unitTypeDescriptions);
+      : Object.keys(project.unitTypeDescriptions),
+  );
+
+  // Withheld types lose their plan as well as their blurb — a Penthouse
+  // drawing on the page is an advertisement for something not for sale.
+  const listedFloorPlans = Object.entries(project.floorPlans).filter(
+    ([unitType]) => listedUnitTypes([unitType]).length > 0,
+  );
 
   const unitTypesWithCopy = sellingTypes
     .map((unitType) => [unitType, project.unitTypeDescriptions[unitType]] as const)
@@ -92,9 +110,16 @@ export default async function ProjectPage({
           <Detail label="Floors" value={project.floors || '—'} />
           {project.buildings ? <Detail label="Buildings" value={project.buildings} /> : null}
           <Detail label="Developer" value={project.developer || '—'} />
+          {/*
+           * Counted from what is actually listed below, not from
+           * `stats.availableUnits`. That figure counts withheld types and is
+           * measured against a total that includes sold ones, so it would have
+           * announced "24 of 30" above a list of nineteen — and the difference
+           * is precisely the information this page is no longer meant to give.
+           */}
           <Detail
             label="Availability"
-            value={`${project.stats.availableUnits} of ${project.stats.totalUnits} units`}
+            value={`${allUnits.length} unit${allUnits.length === 1 ? '' : 's'} available`}
           />
         </dl>
       </header>
@@ -204,11 +229,11 @@ export default async function ProjectPage({
         </section>
       ) : null}
 
-      {Object.keys(project.floorPlans).length > 0 ? (
+      {listedFloorPlans.length > 0 ? (
         <section className="mb-8">
           <h2 className="mb-3 text-sm font-medium">Floor plans</h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {Object.entries(project.floorPlans).map(([unitType, url]) => (
+            {listedFloorPlans.map(([unitType, url]) => (
               <a
                 key={unitType}
                 href={cloudinaryUrl(url, { width: 1400 })}
@@ -236,9 +261,9 @@ export default async function ProjectPage({
 
       <UnitFilters
         projectId={project.id}
-        current={{ tower: filters.tower, type: filters.unitType, status: filters.status }}
+        current={{ tower: filters.tower, type: filters.unitType }}
         towers={hasTower ? ['Tower A', 'Tower B'] : []}
-        unitTypes={project.stats.unitTypes}
+        unitTypes={sellingTypes}
       />
 
       {units.length === 0 ? (
@@ -314,7 +339,6 @@ function FloorGroup({
 }) {
   const prices = rows.map((r) => r.purchasePriceCentavos);
   const types = [...new Set(rows.map((r) => r.unitType))];
-  const available = rows.filter((r) => r.status === 'Available').length;
 
   return (
     <details open={open} className="group">
@@ -336,9 +360,9 @@ function FloorGroup({
 
         <span className="text-sm font-semibold">Floor {floor}</span>
 
+        {/* No "3 of 5 available" any more — every row here is available. */}
         <span className="text-xs text-neutral-500">
           {rows.length} {rows.length === 1 ? 'unit' : 'units'}
-          {available < rows.length ? ` · ${available} available` : ''}
         </span>
 
         <span className="hidden truncate text-xs text-neutral-500 sm:inline">
@@ -376,7 +400,6 @@ function FloorGroup({
                   {unit.unitType} · {unit.areaSqm} sqm
                 </p>
               </div>
-              <StatusBadge status={unit.status} />
             </div>
 
             <div className="mt-2 flex items-end justify-between gap-3">
@@ -385,13 +408,9 @@ function FloorGroup({
               </p>
               <Link
                 href={`/units/${unit.id}`}
-                className={
-                  unit.status === 'Available'
-                    ? 'shrink-0 text-xs font-semibold text-brand-600 hover:text-accent-500'
-                    : 'shrink-0 text-xs text-neutral-500'
-                }
+                className="shrink-0 text-xs font-semibold text-brand-600 hover:text-accent-500"
               >
-                {unit.status === 'Available' ? 'View & Reserve →' : 'View →'}
+                View &amp; Reserve &rarr;
               </Link>
             </div>
           </li>
@@ -412,7 +431,7 @@ function FloorGroup({
                 Price
               </th>
               <th className={`px-4 py-2 text-right font-medium ${hasTower ? 'w-[26%]' : 'w-[28%]'}`}>
-                Status
+                <span className="sr-only">Reserve</span>
               </th>
             </tr>
           </thead>
@@ -438,13 +457,10 @@ function FloorGroup({
                   {Money.fromCentavos(unit.purchasePriceCentavos).format()}
                 </td>
                 {/*
-                 * Status AND the way forward, in one right-aligned cell.
-                 *
-                 * The unit number has always been a link to this unit's page,
-                 * where the Reserve button lives — but as green text in a
-                 * table it read as a label, not a door. A buyer asked outright
-                 * where they were meant to reserve, which is the whole answer
-                 * about how visible it was.
+                 * The way forward. The status badge that used to share this
+                 * cell is gone — every row on this page is Available now, so
+                 * the badge said the same word on every line, and saying it at
+                 * all is what the client asked to stop.
                  *
                  * It still routes to the unit page rather than straight to the
                  * wizard: floor plan, area and the full price breakdown are
@@ -453,18 +469,11 @@ function FloorGroup({
                  * promise of a shortcut that does not exist.
                  */}
                 <td className="px-4 py-2.5 text-right">
-                  <span className="mr-3 align-middle">
-                    <StatusBadge status={unit.status} />
-                  </span>
                   <Link
                     href={`/units/${unit.id}`}
-                    className={
-                      unit.status === 'Available'
-                        ? 'whitespace-nowrap text-xs font-semibold text-brand-600 hover:text-accent-500'
-                        : 'whitespace-nowrap text-xs text-neutral-500 hover:text-neutral-700'
-                    }
+                    className="whitespace-nowrap text-xs font-semibold text-brand-600 hover:text-accent-500"
                   >
-                    {unit.status === 'Available' ? 'View & Reserve →' : 'View →'}
+                    View &amp; Reserve &rarr;
                   </Link>
                 </td>
               </tr>

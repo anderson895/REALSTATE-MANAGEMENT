@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
-import { Money } from '@sfsr/domain';
+import { Money, isListedToBuyers } from '@sfsr/domain';
 import { getAdminFirestore, getUnit, listAvailableParking } from '@sfsr/infrastructure/server';
 import { Card, PageHeader } from '@sfsr/ui';
 import { getCachedProject } from '@/lib/catalog';
@@ -25,7 +25,16 @@ export default async function ReservePage({ params }: { params: Promise<{ unitId
   const unit = await getUnit(db, unitId);
   if (!unit) notFound();
 
-  if (unit.status !== 'Available') {
+  /*
+   * The same predicate the catalogue uses, so a type withdrawn from sale
+   * cannot be reserved through a link that skips the listings. `status !==
+   * 'Available'` would have let a Penthouse straight through — it is
+   * Available, it is simply not for sale at the moment.
+   *
+   * Still not the control that prevents a double sale: `createReservation`
+   * re-reads the unit inside its transaction, and that is what holds.
+   */
+  if (!isListedToBuyers(unit)) {
     redirect(`/units/${unitId}`);
   }
 

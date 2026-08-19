@@ -1,8 +1,8 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Money, clientCan } from '@sfsr/domain';
-import { StatusBadge, cloudinaryUrl } from '@sfsr/ui';
+import { Money, clientCan, isListedToBuyers } from '@sfsr/domain';
+import { cloudinaryUrl } from '@sfsr/ui';
 import { getCachedProject, getCachedUnit } from '@/lib/catalog';
 import { getTier } from '@/lib/session';
 import { PriceCalculator } from './price-calculator';
@@ -29,7 +29,20 @@ export default async function UnitPage({ params }: { params: Promise<{ unitId: s
 
   const floorPlanUrl = project.floorPlans[unit.unitType] ?? null;
   const canReserve = clientCan(tier, 'reserveUnit');
-  const isAvailable = unit.status === 'Available';
+
+  /*
+   * `isListedToBuyers`, not `status === 'Available'`.
+   *
+   * This page is reachable by a direct link — from a bookmark, a message from
+   * an agent, or a guess — so it is the one surface the catalogue filter
+   * cannot cover. Asking the same predicate the listings ask keeps On Hold,
+   * Sold and withheld types out by the same rule, rather than by a second
+   * condition here that would drift away from the first.
+   *
+   * The page still renders rather than 404s: someone following a bookmark to a
+   * unit that has since sold deserves a sentence, not a dead end.
+   */
+  const listed = isListedToBuyers(unit);
 
   // Parking is priced from the project's cheapest slot rather than by loading
   // the slot list — the picker belongs in the reservation wizard, and reading
@@ -52,10 +65,13 @@ export default async function UnitPage({ params }: { params: Promise<{ unitId: s
 
       <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold">Unit {unit.unitNo}</h1>
-            <StatusBadge status={unit.status} />
-          </div>
+          {/*
+           * No status badge. comments.doc puts unit status with "Billing,
+           * documentation, marketing and sales" — the panel further down says
+           * whether this one can be reserved, which is the only part of the
+           * answer a buyer needs, and it says it without naming On Hold or Sold.
+           */}
+          <h1 className="text-xl font-semibold">Unit {unit.unitNo}</h1>
           <p className="mt-1 text-sm text-neutral-500">
             {unit.unitType} · {project.name}
             {unit.tower ? ` · ${unit.tower}` : ''} · Floor {unit.floor}
@@ -165,15 +181,21 @@ export default async function UnitPage({ params }: { params: Promise<{ unitId: s
           />
 
           <section className="rounded-lg border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
-            {!isAvailable ? (
+            {!listed ? (
               <>
-                <p className="text-sm font-medium">This unit is {unit.status.toLowerCase()}</p>
+                {/*
+                 * Deliberately does not say WHICH — sold, on hold, or a type
+                 * that has been withdrawn all read the same here. Naming it
+                 * would put back exactly what the client asked to take away,
+                 * on the one page they are most likely to reach by link.
+                 */}
+                <p className="text-sm font-medium">This unit is not available for reservation</p>
                 <p className="mt-1 text-sm text-neutral-500">
-                  Browse other units in {project.name} — {project.stats.availableUnits} are still
-                  available.
+                  Browse the other units in {project.name} — there may be one like it on another
+                  floor.
                 </p>
                 <Link
-                  href={`/projects/${project.id}?status=Available`}
+                  href={`/projects/${project.id}`}
                   className="mt-4 inline-block rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
                 >
                   See available units

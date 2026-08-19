@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { Unit, UNIT_STATUSES, type UnitStatus } from './unit';
+import {
+  Unit,
+  UNIT_STATUSES,
+  UNIT_TYPES,
+  WITHHELD_UNIT_TYPES,
+  isListedToBuyers,
+  listedUnitTypes,
+  type UnitStatus,
+} from './unit';
 import { Money } from '../value-objects/money';
 import { ProjectId, ReservationNumber, UnitId } from '../value-objects/identifiers';
 import { IllegalStateTransitionError, UnitNotAvailableError } from '../errors';
@@ -145,4 +153,70 @@ describe('Unit — exhaustive transition matrix', () => {
       });
     }
   }
+});
+
+describe('isListedToBuyers', () => {
+  const unit = (over: { status?: string; unitType?: string } = {}) => ({
+    status: 'Available',
+    unitType: 'Studio',
+    ...over,
+  });
+
+  it('lists an Available unit of a type still on sale', () => {
+    expect(isListedToBuyers(unit())).toBe(true);
+  });
+
+  it('hides every status except Available', () => {
+    // comments.doc: "No need na po makita ng prospect buyer/buyer ang on hold
+    // at sold." Written as a loop over UNIT_STATUSES so a status added later
+    // has to be classified deliberately rather than defaulting to visible.
+    for (const status of UNIT_STATUSES) {
+      expect(isListedToBuyers(unit({ status })), status).toBe(status === 'Available');
+    }
+  });
+
+  it('hides a withheld type even when it is Available', () => {
+    // The trap this exists for: a Penthouse IS Available. Anything checking
+    // `status === 'Available'` lets it straight through, which is how it would
+    // have stayed reservable by direct link after being taken off the listings.
+    expect(isListedToBuyers(unit({ unitType: 'Penthouse' }))).toBe(false);
+  });
+
+  it('withholds Penthouse and nothing else', () => {
+    for (const unitType of UNIT_TYPES) {
+      expect(isListedToBuyers(unit({ unitType })), unitType).toBe(unitType !== 'Penthouse');
+    }
+  });
+
+  it('names only real unit types as withheld', () => {
+    // A typo here would silently withhold nothing at all.
+    for (const withheld of WITHHELD_UNIT_TYPES) {
+      expect(UNIT_TYPES, withheld).toContain(withheld);
+    }
+  });
+});
+
+describe('listedUnitTypes', () => {
+  it('drops the withheld types and keeps the order', () => {
+    expect(listedUnitTypes(['Studio', 'Penthouse', 'Two Bedroom'])).toEqual([
+      'Studio',
+      'Two Bedroom',
+    ]);
+  });
+
+  it('leaves a list with nothing withheld alone', () => {
+    expect(listedUnitTypes(['Studio', 'One Bedroom'])).toEqual(['Studio', 'One Bedroom']);
+  });
+
+  it('agrees with isListedToBuyers about every type', () => {
+    // Two functions, one rule. They are applied in different places — the
+    // filter chips and the rows — and a screen offering a filter that matches
+    // no row is how a disagreement between them would surface.
+    const listed = listedUnitTypes([...UNIT_TYPES]);
+    for (const unitType of UNIT_TYPES) {
+      expect(listed.includes(unitType), unitType).toBe(
+        isListedToBuyers({ status: 'Available', unitType }),
+      );
+    }
+  });
 });
