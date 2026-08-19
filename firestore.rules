@@ -289,6 +289,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /usernameReminders/{email} {
+      // A send timestamp per address, for the cooldown on
+      // /api/auth/forgot-username. Holds no secret — and is still sealed,
+      // because the document id IS an email address: a readable collection
+      // would be a list of everyone who has asked, which is a list of
+      // customers. Same reasoning as passwordResetCodes below.
+      allow read, write: if false;
+    }
+
     match /passwordResetCodes/{email} {
       // Hashed one-time passcodes. Sealed from the browser entirely.
       //

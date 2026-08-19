@@ -12,3 +12,4 @@
 export { sendMail, type MailMessage } from './send';
 export { getMailTransport, resetMailTransport } from './transport';
 export { otpEmail } from './templates/otp';
+export { usernameReminderEmail } from './templates/username';

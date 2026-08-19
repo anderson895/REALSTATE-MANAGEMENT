@@ -125,6 +125,7 @@ export {
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
   resolveUsername,
+  findClientUsernamesByEmail,
   createSessionCookie,
   verifySessionCookie,
   toSession,
@@ -134,4 +135,4 @@ export {
   type ClientSession,
 } from './auth';
 
-export { sendMail, otpEmail, getMailTransport, type MailMessage } from './mail';
+export { sendMail, otpEmail, usernameReminderEmail, getMailTransport, type MailMessage } from './mail';

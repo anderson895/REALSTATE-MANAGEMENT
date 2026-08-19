@@ -102,6 +102,19 @@ export function LoginForm() {
         required
         value={username}
         onChange={(e) => setUsername(e.target.value)}
+        trailing={
+          /*
+           * Sits on the USERNAME field, mirroring "Forgot password?" below.
+           *
+           * comments.doc asked for username recovery alongside the password
+           * one, and this is the field where the person is stuck. Putting the
+           * link anywhere else would leave them to work out that the reset
+           * flow — which only changes a password — was never going to help.
+           */
+          <Link href="/forgot-username" className="text-xs text-brand-600 hover:underline">
+            Forgot username?
+          </Link>
+        }
       />
 
       <TextField

@@ -44,6 +44,49 @@ export async function resolveUsername(username: string): Promise<UsernameRecord 
 }
 
 /**
+ * The other direction: an address, back to the username registered against it.
+ *
+ * comments.doc asked for it outright — "Do we have password retrieval pag
+ * nakalimutan ni prospect buyer/buyer ang password? ... same din sa username."
+ * Password reset already existed. This did not, and its absence was the sharper
+ * gap: sign-in takes a USERNAME, so a buyer who has forgotten that cannot use
+ * the password reset either. The client had already worked out where it ends —
+ * "no need gumawa ng another account" — and a second account for the same
+ * person is a second master file for Documentation to reconcile.
+ *
+ * ── Clients only ─────────────────────────────────────────────────────────
+ *
+ * Employee usernames are never returned. Staff credentials are I.T's to
+ * maintain — RESERVATION.doc and INTERNAL.xls both say so — and the buyer
+ * portal must not become a way to enumerate staff accounts by trying company
+ * addresses against it.
+ *
+ * ── Why it returns a list ────────────────────────────────────────────────
+ *
+ * Nothing in the schema stops two usernames sharing an address: `usernames` is
+ * keyed by username, so what it enforces is the uniqueness of the username, not
+ * of the email. Returning only the first match would send half an answer to
+ * someone who then cannot sign in with it.
+ */
+export async function findClientUsernamesByEmail(email: string): Promise<string[]> {
+  const key = email.trim().toLowerCase();
+  if (key.length === 0) return [];
+
+  const snap = await getAdminFirestore()
+    .collection('usernames')
+    .where('email', '==', key)
+    .limit(10)
+    .get();
+
+  // `kind` is filtered here rather than in the query so this needs no composite
+  // index — an equality on `email` alone is served by the automatic one.
+  return snap.docs
+    .filter((doc) => doc.data().kind !== 'employee')
+    .map((doc) => doc.id)
+    .sort();
+}
+
+/**
  * Exchanges a freshly minted Firebase ID token for a session cookie.
  *
  * A session cookie is used rather than passing the ID token around because it
