@@ -54,7 +54,9 @@ export function LoginForm() {
       const response = await fetch('/api/auth/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
+        // `remember` was drawn as a checkbox and never sent, so unticking it
+        // did nothing. See the note in the route.
+        body: JSON.stringify({ idToken, remember }),
       });
 
       if (!response.ok) {
