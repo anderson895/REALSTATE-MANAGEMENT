@@ -10,6 +10,7 @@ import {
   PAYMENT_TERMS,
   PricingService,
   REMITTANCE_ACCOUNTS,
+  type DiscountSchedule,
   type DownPaymentTier,
   type FinancingOption,
   type IdType,
@@ -34,8 +35,6 @@ import { useIdCheck } from './use-id-check';
  * the down-payment tier recomputes instantly with no server round trip and no
  * Firestore read (§3.1).
  */
-
-const pricing = new PricingService();
 
 const STEPS = [
   'Property',
@@ -72,14 +71,26 @@ export function ReservationWizard({
   parking,
   buyer,
   reservationFeeCentavos,
+  discountSchedule,
 }: {
   unit: UnitProps;
   project: { id: string; name: string; location: string };
   parking: readonly ParkingOption[];
   buyer: { fullName: string; dateOfBirth: string; sex: string; email: string; mobile: string };
   reservationFeeCentavos: number;
+  /**
+   * Documentation's rates, read on the server. See apps/portal/lib/pricing.ts.
+   *
+   * Passed in rather than looked up here because this component recomputes on
+   * every keystroke and must stay free of I/O — and because the rate a buyer is
+   * quoted has to be the one the API then writes onto their reservation.
+   */
+  discountSchedule: DiscountSchedule;
 }) {
   const router = useRouter();
+  // Was a module-level singleton, which is precisely what a rate somebody can
+  // edit cannot be.
+  const pricing = useMemo(() => new PricingService(discountSchedule), [discountSchedule]);
   const [step, setStep] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -200,8 +211,8 @@ export function ReservationWizard({
       return null;
     }
   }, [
-    unit.purchasePriceCentavos, withParking, selectedParking, downPaymentTier, paymentTerm,
-    reservationFeeCentavos,
+    pricing, unit.purchasePriceCentavos, withParking, selectedParking, downPaymentTier,
+    paymentTerm, reservationFeeCentavos,
   ]);
 
   function payload() {

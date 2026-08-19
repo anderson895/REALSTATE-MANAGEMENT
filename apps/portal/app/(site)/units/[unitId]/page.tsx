@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { Money, clientCan, isListedToBuyers } from '@sfsr/domain';
 import { cloudinaryUrl } from '@sfsr/ui';
 import { getCachedProject, getCachedUnit } from '@/lib/catalog';
+import { getCachedDiscountSchedule } from '@/lib/pricing';
 import { getTier } from '@/lib/session';
 import { PriceCalculator } from './price-calculator';
 import { ReserveButton } from './reserve-button';
@@ -24,7 +25,11 @@ export default async function UnitPage({ params }: { params: Promise<{ unitId: s
   const unit = await getCachedUnit(unitId);
   if (!unit) notFound();
 
-  const [project, tier] = await Promise.all([getCachedProject(unit.projectId), getTier()]);
+  const [project, tier, discountSchedule] = await Promise.all([
+    getCachedProject(unit.projectId),
+    getTier(),
+    getCachedDiscountSchedule(),
+  ]);
   if (!project) notFound();
 
   const floorPlanUrl = project.floorPlans[unit.unitType] ?? null;
@@ -178,6 +183,7 @@ export default async function UnitPage({ params }: { params: Promise<{ unitId: s
             unitPriceCentavos={unit.purchasePriceCentavos}
             parkingPriceCentavos={parkingPriceCentavos}
             reservationFeeCentavos={RESERVATION_FEE_CENTAVOS}
+            discountSchedule={discountSchedule}
           />
 
           <section className="rounded-lg border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">

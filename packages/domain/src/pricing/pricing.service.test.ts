@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { Money } from '../value-objects/money';
 import { InvalidValueError } from '../errors';
 import { PricingService, PAYMENT_TERMS, type PaymentTerm } from './pricing.service';
-import { DiscountStrategyFactory, DOWN_PAYMENT_TIERS } from './discount-strategy';
+import {
+  DEFAULT_DISCOUNT_SCHEDULE,
+  DiscountStrategyFactory,
+  DOWN_PAYMENT_TIERS,
+  validateDiscountSchedule,
+  type DiscountSchedule,
+  type DownPaymentTier,
+} from './discount-strategy';
 
 const pricing = new PricingService();
 const RESERVATION_FEE = Money.fromPesos(50_000);
@@ -155,5 +162,118 @@ describe('PricingService — parking and edge cases', () => {
         reservationFee: RESERVATION_FEE,
       }),
     ).toThrow(InvalidValueError);
+  });
+});
+
+describe('a configurable discount schedule', () => {
+  // comments.doc: "Pag may revision sa discount or special discount promo need
+  // sya iedit sa internal, ang incharge sa pagpalit ng discount is
+  // Documentation." These rates were compiled in until then.
+  const unit = Money.fromPesos(6_000_000);
+
+  const summaryWith = (schedule: DiscountSchedule, tier: DownPaymentTier) =>
+    new PricingService(schedule).computeSummary({
+      unitPrice: unit,
+      downPaymentTier: tier,
+      paymentTerm: 'Spot Cash',
+      reservationFee: RESERVATION_FEE,
+    });
+
+  it('prices exactly as before when given no schedule', () => {
+    // The guarantee that made this change safe to ship: every existing caller
+    // constructs `new PricingService()` and must be unaffected.
+    const before = new PricingService().computeSummary({
+      unitPrice: unit,
+      downPaymentTier: 40,
+      paymentTerm: 'Spot Cash',
+      reservationFee: RESERVATION_FEE,
+    });
+    expect(before.promotionalDiscount.toCentavos()).toBe(
+      summaryWith(DEFAULT_DISCOUNT_SCHEDULE, 40).promotionalDiscount.toCentavos(),
+    );
+  });
+
+  it('honours an edited rate', () => {
+    // 40% tier moved from 10% to 7.5% of the purchase price.
+    const edited = DEFAULT_DISCOUNT_SCHEDULE.map((rule) =>
+      rule.tier === 40 ? { ...rule, rate: 7.5 } : rule,
+    );
+    expect(summaryWith(edited, 40).promotionalDiscount).toEqual(Money.fromPesos(450_000));
+    // Untouched tiers must not move with it.
+    expect(summaryWith(edited, 30).promotionalDiscount).toEqual(Money.fromPesos(300_000));
+  });
+
+  it('honours an edited base, which changes the answer by an order of magnitude', () => {
+    // The mistake the editing screen prices out loud: 10% of a ₱6,000,000 unit
+    // is ₱600,000; 10% of its 20% down payment is ₱120,000. Same "10".
+    const ofPrice = DEFAULT_DISCOUNT_SCHEDULE.map((rule) =>
+      rule.tier === 20 ? { ...rule, base: 'purchasePrice' as const } : rule,
+    );
+    expect(summaryWith(DEFAULT_DISCOUNT_SCHEDULE, 20).promotionalDiscount).toEqual(
+      Money.fromPesos(120_000),
+    );
+    expect(summaryWith(ofPrice, 20).promotionalDiscount).toEqual(Money.fromPesos(600_000));
+  });
+
+  it('falls back to the documented rule when a tier is missing from the schedule', () => {
+    // A configuration fault must not turn the reservation form into an error
+    // message on a public website. RESERVATION.doc's own number is the answer.
+    const missing = DEFAULT_DISCOUNT_SCHEDULE.filter((rule) => rule.tier !== 30);
+    expect(summaryWith(missing, 30).promotionalDiscount).toEqual(Money.fromPesos(300_000));
+  });
+
+  it('treats a zero rate as no discount whatever the base says', () => {
+    const zeroed = DEFAULT_DISCOUNT_SCHEDULE.map((rule) =>
+      rule.tier === 50 ? { ...rule, rate: 0 } : rule,
+    );
+    const summary = summaryWith(zeroed, 50);
+    expect(summary.promotionalDiscount.isZero()).toBe(true);
+    expect(summary.discountDescription).toBe('No promotional discount');
+  });
+});
+
+describe('validateDiscountSchedule', () => {
+  it('accepts the documented schedule', () => {
+    expect(validateDiscountSchedule(DEFAULT_DISCOUNT_SCHEDULE)).toEqual([]);
+  });
+
+  it('refuses a negative rate, and one above 100%', () => {
+    const negative = DEFAULT_DISCOUNT_SCHEDULE.map((r) => (r.tier === 30 ? { ...r, rate: -5 } : r));
+    const absurd = DEFAULT_DISCOUNT_SCHEDULE.map((r) => (r.tier === 30 ? { ...r, rate: 150 } : r));
+    expect(validateDiscountSchedule(negative).join(' ')).toMatch(/negative/);
+    expect(validateDiscountSchedule(absurd).join(' ')).toMatch(/exceed 100/);
+  });
+
+  it('refuses a rate with more than two decimal places', () => {
+    // A rate is a published commercial term, not a float to be carried to
+    // fifteen digits — and Money rounds, so the extra precision is a lie.
+    const fussy = DEFAULT_DISCOUNT_SCHEDULE.map((r) => (r.tier === 30 ? { ...r, rate: 5.005 } : r));
+    expect(validateDiscountSchedule(fussy).join(' ')).toMatch(/two decimal places/);
+  });
+
+  it('refuses a schedule missing a tier the form offers', () => {
+    const missing = DEFAULT_DISCOUNT_SCHEDULE.filter((r) => r.tier !== 20);
+    expect(validateDiscountSchedule(missing).join(' ')).toMatch(/20% down payment tier is missing/);
+  });
+
+  it('refuses a tier listed twice', () => {
+    const twice = [...DEFAULT_DISCOUNT_SCHEDULE, { tier: 30 as const, rate: 99, base: 'none' as const }];
+    expect(validateDiscountSchedule(twice).join(' ')).toMatch(/listed twice/);
+  });
+
+  it('refuses a rate that is not a number at all', () => {
+    const nan = DEFAULT_DISCOUNT_SCHEDULE.map((r) => (r.tier === 30 ? { ...r, rate: NaN } : r));
+    expect(validateDiscountSchedule(nan).join(' ')).toMatch(/must be a number/);
+  });
+
+  it('covers every tier the reservation form offers', () => {
+    // The two lists are edited in different files; a tier added to
+    // DOWN_PAYMENT_TIERS without a rule would price as a silent fallback.
+    for (const tier of DOWN_PAYMENT_TIERS) {
+      expect(
+        DEFAULT_DISCOUNT_SCHEDULE.some((rule) => rule.tier === tier),
+        `tier ${tier}`,
+      ).toBe(true);
+    }
   });
 });

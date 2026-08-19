@@ -15,6 +15,7 @@ import {
   FirestoreUnitOfWork,
   FirestoreUnitRepository,
   getAdminFirestore,
+  getDiscountSchedule,
 } from '@sfsr/infrastructure/server';
 import { getClientSession } from '@/lib/session';
 import { reservationSchema } from '@/lib/schemas/reservation';
@@ -106,10 +107,39 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const unitSnap = await db.collection('units').doc(data.unitId).get();
     const projectId = unitSnap.exists ? (unitSnap.data()?.projectId ?? null) : null;
 
+    /*
+     * The discount rule this sale was made under, frozen onto the reservation.
+     *
+     * ── Why the rate is stored and not just the tier ─────────────────────
+     *
+     * It used to be only the tier: the discount was recomputed from
+     * `downPaymentTier` every time anything displayed it. That was fine while
+     * the rates were compiled into the bundle and could not move.
+     *
+     * comments.doc made them editable — "ang incharge sa pagpalit ng discount
+     * is Documentation" — and the moment they can move, recomputing means
+     * every approved reservation on the 30% tier silently re-prices the day
+     * somebody edits that tier, including ones with a signed Contract to Sell.
+     * A Statement of Account that disagrees with the paper the buyer holds is
+     * not a display bug.
+     *
+     * So the rule is copied here, at submit, and the reservation carries it for
+     * life. Editing the schedule reaches new applications only. Reservations
+     * written before this field existed have no snapshot; anything reading it
+     * must fall back to the current schedule, which is the behaviour they
+     * already had.
+     */
+    const { schedule } = await getDiscountSchedule(db);
+    const appliedRule = schedule.find((rule) => rule.tier === data.downPaymentTier) ?? null;
+
     batch.set(
       db.collection('reservations').doc(number.value),
       {
         projectId,
+        discountRule: appliedRule
+          ? { tier: appliedRule.tier, rate: appliedRule.rate, base: appliedRule.base }
+          : null,
+        discountAppliedAt: FieldValue.serverTimestamp(),
         // Which channel this came in through. A staff-entered walk-in writes
         // 'Internal'; the Client Master Files screen shows both.
         source: 'Portal',

@@ -7,6 +7,7 @@ import {
   Money,
   PAYMENT_TERMS,
   PricingService,
+  type DiscountSchedule,
   type DownPaymentTier,
   type FinancingOption,
   type PaymentTerm,
@@ -26,17 +27,21 @@ import {
  * dragging the term slider costs zero Firestore reads.
  */
 
-const pricing = new PricingService();
-
 export function PriceCalculator({
   unitPriceCentavos,
   parkingPriceCentavos,
   reservationFeeCentavos,
+  discountSchedule,
 }: {
   unitPriceCentavos: number;
   parkingPriceCentavos: number;
   reservationFeeCentavos: number;
+  /** Documentation maintains these; the server reads them. See lib/pricing.ts. */
+  discountSchedule: DiscountSchedule;
 }) {
+  // Rebuilt only when the schedule changes. It used to be a module-level
+  // singleton, which is exactly what a configurable rate cannot be.
+  const pricing = useMemo(() => new PricingService(discountSchedule), [discountSchedule]);
   const [tier, setTier] = useState<DownPaymentTier>(20);
   const [term, setTerm] = useState<PaymentTerm>(24);
   const [financing, setFinancing] = useState<FinancingOption>('Bank Financing');
@@ -56,7 +61,7 @@ export function PriceCalculator({
       // Cannot happen for the seeded inventory, but the UI must not blank out.
       return null;
     }
-  }, [unitPriceCentavos, parkingPriceCentavos, reservationFeeCentavos, tier, term, withParking]);
+  }, [pricing, unitPriceCentavos, parkingPriceCentavos, reservationFeeCentavos, tier, term, withParking]);
 
   const select =
     'mt-1 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 dark:border-neutral-700 dark:bg-neutral-800';

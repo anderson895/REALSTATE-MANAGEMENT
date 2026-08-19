@@ -407,3 +407,30 @@ export const clientProfileUpdated = (
     fields: Object.keys(changes),
     changes,
   });
+
+// ── Pricing ──────────────────────────────────────────────────────────────────
+
+/**
+ * Documentation changed the promotional discount rates.
+ *
+ * Carries BOTH schedules in full, not the fields that moved. Every other event
+ * here names a record that still exists and can be looked up; this one names a
+ * rule, and the rule it replaced is gone the moment it is written. Without the
+ * old schedule in the entry there is no way to answer "what discount was a
+ * buyer being quoted last Tuesday" — which is the question that gets asked when
+ * a signed Contract to Sell and a Statement of Account disagree.
+ *
+ * Reservations snapshot the rate they were sold under, so this log is the
+ * history of the policy rather than the source of any individual price.
+ */
+export const discountScheduleChanged = (
+  from: readonly { readonly tier: number; readonly rate: number; readonly base: string }[],
+  to: readonly { readonly tier: number; readonly rate: number; readonly base: string }[],
+  by: EmployeeId,
+  at: Date,
+): DomainEvent =>
+  event('pricing.discountScheduleChanged', at, {
+    changedBy: by.value,
+    from: from.map((rule) => ({ ...rule })),
+    to: to.map((rule) => ({ ...rule })),
+  });

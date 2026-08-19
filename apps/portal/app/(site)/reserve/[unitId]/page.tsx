@@ -5,6 +5,7 @@ import { Money, isListedToBuyers } from '@sfsr/domain';
 import { getAdminFirestore, getUnit, listAvailableParking } from '@sfsr/infrastructure/server';
 import { Card, PageHeader } from '@sfsr/ui';
 import { getCachedProject } from '@/lib/catalog';
+import { getCachedDiscountSchedule } from '@/lib/pricing';
 import { requireCapability } from '@/lib/session';
 import { ReservationWizard } from './wizard';
 
@@ -38,7 +39,7 @@ export default async function ReservePage({ params }: { params: Promise<{ unitId
     redirect(`/units/${unitId}`);
   }
 
-  const [project, parking, clientDoc] = await Promise.all([
+  const [project, parking, clientDoc, discountSchedule] = await Promise.all([
     // CACHED, unlike the unit above. A project's name and location do not go
     // stale in a way that can hurt anyone, and this entry is already warm from
     // the browse pages — so it costs no read and no wait on the slowest route
@@ -49,6 +50,15 @@ export default async function ReservePage({ params }: { params: Promise<{ unitId
     // registration. RESERVATION.doc: "The system automatically retrieves the
     // buyer's basic information from the registered Initial Account."
     db.collection('clients').doc(session.uid).get(),
+    /*
+     * The rates this application will be priced AND written under.
+     *
+     * Read once, here, and handed to the wizard — so the figure the buyer
+     * agrees to on screen is the figure /api/reservations snapshots onto the
+     * reservation. Letting the browser and the API each fetch their own would
+     * open a window, however small, in which they disagree about a discount.
+     */
+    getCachedDiscountSchedule(),
   ]);
 
   if (!project) notFound();
@@ -118,6 +128,7 @@ export default async function ReservePage({ params }: { params: Promise<{ unitId
           mobile: String(client.mobile ?? ''),
         }}
         reservationFeeCentavos={RESERVATION_FEE_CENTAVOS}
+        discountSchedule={discountSchedule}
       />
     </div>
   );

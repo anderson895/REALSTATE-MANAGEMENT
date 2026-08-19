@@ -13,6 +13,7 @@ import {
 import {
   getAdminAuth,
   getAdminFirestore,
+  getDiscountSchedule,
   searchClients,
   type ClientMasterfileRow,
 } from '@sfsr/infrastructure/server';
@@ -296,10 +297,22 @@ export async function submitWalkIn(payload: unknown): Promise<SubmitResult> {
     const unitSnap = await db.collection('units').doc(data.unitId).get();
     const projectId = unitSnap.exists ? (unitSnap.data()?.projectId ?? null) : null;
 
+    // The discount rule this sale was made under, frozen onto the reservation —
+    // exactly as the Portal route does it, and for the reason spelled out
+    // there. A walk-in and a portal application must not price differently, and
+    // a counter sale is the one most likely to be made on the day a rate
+    // changes.
+    const { schedule } = await getDiscountSchedule(db);
+    const appliedRule = schedule.find((rule) => rule.tier === data.downPaymentTier) ?? null;
+
     batch.set(
       db.collection('reservations').doc(number.value),
       {
         projectId,
+        discountRule: appliedRule
+          ? { tier: appliedRule.tier, rate: appliedRule.rate, base: appliedRule.base }
+          : null,
+        discountAppliedAt: FieldValue.serverTimestamp(),
         source: 'Internal',
         // WHO typed it. Not who verified it and not who approved it — those are
         // separate fields, filled by separate people, and the audit trail is

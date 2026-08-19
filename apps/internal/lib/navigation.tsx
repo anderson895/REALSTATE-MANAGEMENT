@@ -11,6 +11,7 @@ import {
   History,
   LayoutDashboard,
   Megaphone,
+  Percent,
   Receipt,
   Settings2,
   ShieldCheck,
@@ -162,6 +163,24 @@ const ROUTES: readonly ModuleRoute[] = [
     label: 'Approval Monitoring',
     group: 'Processing',
     icon: ShieldCheck,
+  },
+  /*
+   * comments.doc: "ang incharge sa pagpalit ng discount is Documentation."
+   *
+   * Narrowed with `roles` rather than left on the module, because
+   * APPROVAL_MONITORING is also held by Account Receivables — who are
+   * deliberately NOT the department that sets a discount, for the segregation
+   * reason spelled out at `canManageDiscounts`. Anyone holding the module can
+   * still READ the rates by going to the page; only Documentation is offered
+   * the menu item, and only Documentation is given a form.
+   */
+  {
+    module: 'APPROVAL_MONITORING',
+    href: '/discounts',
+    label: 'Discount Rates',
+    group: 'Processing',
+    icon: Percent,
+    roles: ['DOCUMENTATION'],
   },
   {
     module: 'DOCUMENTARY_REQUIREMENTS',

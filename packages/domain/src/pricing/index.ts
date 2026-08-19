@@ -1,8 +1,14 @@
 export {
   DiscountStrategy,
   DiscountStrategyFactory,
+  DEFAULT_DISCOUNT_SCHEDULE,
+  DISCOUNT_BASES,
   DOWN_PAYMENT_TIERS,
   isDownPaymentTier,
+  validateDiscountSchedule,
+  type DiscountBase,
+  type DiscountRule,
+  type DiscountSchedule,
   type DownPaymentTier,
 } from './discount-strategy';
 

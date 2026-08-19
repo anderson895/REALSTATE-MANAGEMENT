@@ -100,3 +100,10 @@ export {
   type ProjectMasterfileRow,
   type StatusByProject,
 } from './documentation.queries';
+
+export {
+  PRICING_SETTINGS_DOC,
+  getDiscountSchedule,
+  saveDiscountSchedule,
+  type DiscountScheduleRecord,
+} from './pricing.settings';

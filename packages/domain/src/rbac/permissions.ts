@@ -389,6 +389,37 @@ export function canRemoveInventory(actor: InternalActor): boolean {
   return actor.role === 'MARKETING' && can(actor, 'UNIT_INVENTORY', 'create');
 }
 
+/**
+ * May this person change the promotional discount rates?
+ *
+ * comments.doc: "Pag may revision sa discount or special discount promo need
+ * sya iedit sa internal, ang incharge sa pagpalit ng discount is
+ * Documentation."
+ *
+ * ── Why a capability rather than a new module ────────────────────────────
+ *
+ * MODULES is transcribed from RBAC.xls, the client's own workbook, and the
+ * matrix earns its keep by being readable against that spreadsheet line by
+ * line. Inventing a "PRICING" row would put something in it the workbook never
+ * said. Same shape as `canRaiseWalkIn` and `canRemoveInventory`: a later
+ * instruction, named beside the matrix rather than smuggled into it.
+ *
+ * ── Why it is nailed to the role ─────────────────────────────────────────
+ *
+ * The client named a department, not a permission level, and segregation is
+ * the reason to keep it that way. A discount reduces what a buyer owes;
+ * whoever sets it should not also be the person who verifies the payment
+ * against it. Billing and Account Receivables both hold richer money
+ * permissions than Documentation and are both deliberately excluded.
+ *
+ * `APPROVAL_MONITORING` with `modify` is the floor rather than the whole test —
+ * it is the grant that already makes Documentation the department that settles
+ * what a reservation finally says.
+ */
+export function canManageDiscounts(actor: InternalActor): boolean {
+  return actor.role === 'DOCUMENTATION' && can(actor, 'APPROVAL_MONITORING', 'modify');
+}
+
 export function clientCan(tier: ClientTier, capability: ClientCapability): boolean {
   return CLIENT_MATRIX[tier].includes(capability);
 }

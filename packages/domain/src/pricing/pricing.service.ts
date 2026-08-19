@@ -1,6 +1,11 @@
 import { Money } from '../value-objects/money';
 import { InvalidValueError } from '../errors';
-import { DiscountStrategyFactory, type DownPaymentTier } from './discount-strategy';
+import {
+  DEFAULT_DISCOUNT_SCHEDULE,
+  DiscountStrategyFactory,
+  type DiscountSchedule,
+  type DownPaymentTier,
+} from './discount-strategy';
 
 /**
  * Instalment terms offered for the down payment.
@@ -58,6 +63,20 @@ export interface PaymentSummary {
  * unit-testable.
  */
 export class PricingService {
+  /**
+   * The discount rules this instance prices with.
+   *
+   * Defaults to RESERVATION.doc's, so `new PricingService()` behaves exactly as
+   * it always did. Documentation's saved schedule is passed in by whatever has
+   * already read it.
+   *
+   * A constructor argument rather than a lookup inside `computeSummary`,
+   * because this class runs in the BROWSER: the reservation wizard recomputes
+   * on every keystroke with no server round trip, and that only works while the
+   * service stays free of I/O.
+   */
+  constructor(private readonly schedule: DiscountSchedule = DEFAULT_DISCOUNT_SCHEDULE) {}
+
   /** Unit price + parking price, per "PURCHASE PRICE" in the reservation form. */
   totalPurchasePrice(unitPrice: Money, parkingPrice?: Money): Money {
     return parkingPrice ? unitPrice.add(parkingPrice) : unitPrice;
@@ -67,7 +86,7 @@ export class PricingService {
     const totalPurchasePrice = this.totalPurchasePrice(input.unitPrice, input.parkingPrice);
     const downPayment = totalPurchasePrice.percentage(input.downPaymentTier);
 
-    const strategy = DiscountStrategyFactory.forTier(input.downPaymentTier);
+    const strategy = DiscountStrategyFactory.forTier(input.downPaymentTier, this.schedule);
     const promotionalDiscount = strategy.calculate(totalPurchasePrice, downPayment);
 
     const deductions = input.reservationFee.add(promotionalDiscount);
