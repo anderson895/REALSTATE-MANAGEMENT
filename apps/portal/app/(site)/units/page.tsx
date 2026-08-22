@@ -104,6 +104,24 @@ export default async function UnitsPage({
   // the buyer has already opened that card — both want the actual units.
   const showFlatList = min !== null || max !== null || Boolean(projectId && unitType);
 
+  /*
+   * Has the buyer actually asked for anything yet?
+   *
+   * comments.doc, on this tab: "ito nalang ang ididisplay muna" — the heading,
+   * the total, and the search bar. Nothing is listed until something is typed.
+   *
+   * The same instruction the Client Master Files screen already carries, and
+   * the same reasoning: this is a catalogue of 137 units, and opening it with
+   * twenty-five cards is the "overwhelming sa mata" that removing the pictures
+   * was only half a fix for. A file room does not lay every folder on the table
+   * when you walk in.
+   *
+   * The units are all fetched regardless — they have to be, to count them, and
+   * they come from a cache the project pages have already paid for. Withholding
+   * them is a decision about the screen, not about what it costs.
+   */
+  const searching = Boolean(projectId ?? unitType) || min !== null || max !== null;
+
   const searchBar = (
     <UnitSearchBar
       projects={projects}
@@ -112,16 +130,44 @@ export default async function UnitsPage({
     />
   );
 
+  if (!searching) {
+    return (
+      <div className="mx-auto max-w-5xl px-6 py-10">
+        <Header count={units.length} />
+        {searchBar}
+
+        <div className="rounded-xl border border-dashed border-neutral-300 bg-white/60 px-6 py-14 text-center">
+          <p className="text-sm font-medium text-neutral-800">
+            Search to see what is available
+          </p>
+          <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-neutral-500">
+            Choose a project or a unit type above, or set a price range. You can also browse by
+            building from{' '}
+            <Link href="/projects" className="font-medium text-brand-600 hover:underline">
+              Condominium Projects
+            </Link>
+            .
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (units.length === 0) {
     return (
       <div className="mx-auto max-w-5xl px-6 py-10">
         <Header count={0} projectName={projectId ? projectById.get(projectId)?.name : undefined} />
         {searchBar}
+        {/*
+         * "Clear" no longer means "show me everything" — it returns to the
+         * search prompt. The label says so rather than promising a list the
+         * page will not draw.
+         */}
         <EmptyState
           title="No units match your search"
-          description="Try widening the price range, or clearing the unit type to see everything that is available."
+          description="Try widening the price range, or clearing the unit type and searching again."
           actionHref="/units"
-          actionLabel="See all available units"
+          actionLabel="Start a new search"
         />
       </div>
     );
